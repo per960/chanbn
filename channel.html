@@ -12,15 +12,15 @@
 
     <style>
         :root { --primary-bg: #000000; --text-light: #ffffff; --font-main: 'Roboto', sans-serif; }
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; outline: none !important; }
-        body { background-color: var(--primary-bg); width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; font-family: var(--font-main); overflow: hidden !important; touch-action: none; pointer-events: none; }
-        main { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; pointer-events: none; }
-        .player-wrapper { position: relative; width: 100%; height: 100%; max-width: calc(100vh * (16 / 9)); max-height: calc(100vw * (9 / 16)); background-color: #000; overflow: hidden; aspect-ratio: 16 / 9; pointer-events: none; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--primary-bg); width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; font-family: var(--font-main); overflow: hidden !important; touch-action: none; }
+        main { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+        .player-wrapper { position: relative; width: 100%; height: 100%; max-width: calc(100vh * (16 / 9)); max-height: calc(100vw * (9 / 16)); background-color: #000; overflow: hidden; aspect-ratio: 16 / 9; }
         
-        #yt-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; display: none; pointer-events: none !important; }
-        #yt-wrapper iframe { width: 100%; height: 100%; border: none; pointer-events: none !important; }
+        #yt-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; display: none; pointer-events: none; }
+        #yt-wrapper iframe { width: 100%; height: 100%; border: none; pointer-events: none; }
         
-        #html5-player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 1; object-fit: fill; display: none; background: #000; pointer-events: none !important; }
+        #html5-player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 1; object-fit: fill; display: none; background: #000; pointer-events: none; }
 
         #overlay-scaler { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; transform-origin: top left; pointer-events: none; z-index: 10; }
         #top-image-slider { position: absolute; top: 0; left: 0; width: 100%; height: 160px; z-index: 50; background-color: transparent; overflow: hidden; }
@@ -59,7 +59,8 @@
 <body>
     <main>
         <section class="player-wrapper">
-            <video id="html5-player" crossorigin="anonymous" autoplay playsinline></video>
+            <!-- REMOVED crossorigin="anonymous" so all MP4 links play without CORS block -->
+            <video id="html5-player" autoplay playsinline></video>
             <div id="yt-wrapper"><div id="video-player"></div></div>
             
             <div id="overlay-scaler">
@@ -107,15 +108,12 @@
         const supabaseKey = 'sb_publishable_R-ik0luMifvjFakpfDr3cA_8kIGVVQP';
         const db = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        const urlParams = new URLSearchParams(window.location.search);
-        let OPERATOR_CODE = (urlParams.get('code') || urlParams.get('op') || localStorage.getItem('operator_code') || "").trim().toUpperCase();
-        
+        let OPERATOR_CODE = "";
         let data = { urlPlaylist: [], aptsText: [], sliderText: [], sliderPlaylist: [], settings: null };
         
         let currentVideoIndex = -1; 
         let isSequentialMode = false;
         let sequentialIndex = 0;
-        let activePlayerMode = 'NONE'; // 'YT' or 'HTML5'
         
         let syncIndex = 0; let syncInterval = null; let imageSlideIndex = 0; let imageSliderInterval = null;
         let breakTimeout1, breakTimeout2; 
@@ -133,64 +131,26 @@
             }
         }
 
-        function onPlayerReady(event) {
-            try {
-                event.target.unMute();
-                event.target.setVolume(100);
-                event.target.playVideo();
-            } catch(e) {}
-        }
-
         function onPlayerStateChange(event) {
             if (event.data === YT.PlayerState.ENDED) {
                 onVideoEnded();
-            } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.CUED || event.data === -1) {
-                // Force auto-resume if YouTube ever pauses itself or loses focus
+            } else if (event.data === YT.PlayerState.PAUSED) {
                 setTimeout(() => {
-                    if (activePlayerMode === 'YT' && ytPlayerInstance && typeof ytPlayerInstance.playVideo === 'function') {
-                        try {
-                            ytPlayerInstance.unMute();
-                            ytPlayerInstance.setVolume(100);
-                            ytPlayerInstance.playVideo();
-                        } catch(e) {}
-                    }
-                }, 400);
+                    try { ytPlayerInstance.playVideo(); } catch(e){}
+                }, 300);
             }
         }
-
-        // Watchdog to ensure neither YouTube nor HTML5 video ever stays paused
-        setInterval(() => {
-            try {
-                if (activePlayerMode === 'YT' && ytPlayerInstance && typeof ytPlayerInstance.getPlayerState === 'function') {
-                    const st = ytPlayerInstance.getPlayerState();
-                    if (st === YT.PlayerState.PAUSED || st === YT.PlayerState.CUED || st === -1) {
-                        ytPlayerInstance.unMute();
-                        ytPlayerInstance.setVolume(100);
-                        ytPlayerInstance.playVideo();
-                    }
-                } else if (activePlayerMode === 'HTML5' && html5Player && html5Player.paused && html5Player.readyState >= 2) {
-                    html5Player.muted = false;
-                    html5Player.volume = 1.0;
-                    html5Player.play().catch(()=>{});
-                }
-            } catch(e) {}
-        }, 1500);
 
         html5Player.addEventListener('ended', onVideoEnded);
         html5Player.addEventListener('error', onVideoEnded);
 
         window.startPlayout = function(opCode) {
-            if (opCode) OPERATOR_CODE = opCode.trim().toUpperCase();
+            OPERATOR_CODE = (opCode || "").trim().toUpperCase();
             if (!OPERATOR_CODE) return;
-            if (!window.__playoutInitialized) {
-                window.__playoutInitialized = true;
-                init();
-            }
+            init();
         };
 
         window.stopPlayout = function() {
-            window.__playoutInitialized = false;
-            activePlayerMode = 'NONE';
             clearTimeout(syncInterval); clearTimeout(breakTimeout1); clearTimeout(breakTimeout2);
             clearTimeout(aptsTickerTimeout); clearTimeout(imageSliderInterval);
             
@@ -452,7 +412,6 @@
             } catch(e){}
 
             if (isYouTube) {
-                activePlayerMode = 'YT';
                 html5Player.style.display = 'none';
                 try {
                     html5Player.pause();
@@ -466,24 +425,8 @@
                     if (!ytPlayerInstance) {
                         ytPlayerInstance = new YT.Player('video-player', {
                             videoId: videoId || '',
-                            playerVars: { 
-                                'autoplay': 1, 
-                                'controls': 0, 
-                                'disablekb': 1,
-                                'fs': 0,
-                                'iv_load_policy': 3,
-                                'modestbranding': 1, 
-                                'rel': 0, 
-                                'playsinline': 1, 
-                                'start': Math.floor(offsetSeconds), 
-                                'list': playlistId || '',
-                                'origin': window.location.origin
-                            },
-                            events: { 
-                                'onReady': onPlayerReady,
-                                'onStateChange': onPlayerStateChange, 
-                                'onError': onVideoEnded 
-                            }
+                            playerVars: { 'autoplay': 1, 'controls': 0, 'disablekb': 1, 'modestbranding': 1, 'rel': 0, 'playsinline': 1, 'start': Math.floor(offsetSeconds), 'list': playlistId || '' },
+                            events: { 'onStateChange': onPlayerStateChange, 'onError': onVideoEnded }
                         });
                     } else {
                         if (playlistId && !videoId) ytPlayerInstance.loadPlaylist({list: playlistId, index: 0, startSeconds: offsetSeconds});
@@ -491,7 +434,6 @@
                     }
                 }
             } else {
-                activePlayerMode = 'HTML5';
                 ytWrapper.style.display = 'none';
                 if (ytPlayerInstance) {
                     try { ytPlayerInstance.destroy(); } catch(e) {}
@@ -500,8 +442,6 @@
                 ytWrapper.innerHTML = '<div id="video-player"></div>';
 
                 html5Player.style.display = 'block';
-                html5Player.muted = false;
-                html5Player.volume = 1.0;
                 const isM3u8 = videoUrl.toLowerCase().includes('.m3u8');
                 
                 if (isM3u8 && typeof Hls !== 'undefined' && Hls.isSupported()) {
@@ -585,11 +525,6 @@
                     resizeOverlay();
                 }
             }, 200);
-        }
-
-        // Auto-start if code is already in URL parameters
-        if (OPERATOR_CODE) {
-            window.startPlayout(OPERATOR_CODE);
         }
     </script>
 </body>

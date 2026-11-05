@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Channel Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+
+    <style>
+        :root { --bg-black: #121212; --bg-dark-gray: #1a1a1a; --bg-card: #222222; --accent-red: #ff0000; --text-main: #ffffff; --text-muted: #a1a1a6; --border-color: #333333; }
+        
+        body, html { margin: 0; padding: 0; background-color: var(--bg-black); color: var(--text-main); font-family: 'Inter', sans-serif; box-sizing: border-box; min-height: 100vh; }
+        .container { display: flex; flex-direction: column; width: 100%; max-width: 1000px; margin: 0 auto; background-color: var(--bg-dark-gray); padding: 12px; box-sizing: border-box; min-height: 100vh; }
+        
+        .login-wrapper { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #0f0f0f; display: flex; justify-content: center; align-items: center; z-index: 9999; }
+        .login-box { background-color: #1a1b1c; border-radius: 12px; padding: 40px; width: 90%; max-width: 320px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .login-title { color: #28a745; font-size: 22px; font-weight: 600; margin-bottom: 5px; }
+        .login-subtitle { color: #aaa; font-size: 14px; margin-bottom: 20px; }
+        .login-input { background: #111; border: 1px solid #333; border-radius: 6px; color: #fff; width: 100%; padding: 15px; margin-bottom: 20px; font-size: 16px; text-align: center; letter-spacing: 2px; box-sizing: border-box; outline: none; }
+        .login-btn { background: #28a745; color: #fff; border: none; border-radius: 6px; width: 100%; padding: 15px; font-size: 16px; font-weight: 600; cursor: pointer; }
+        .loading-text { color: #aaa; font-size: 14px; margin-top: 15px; font-weight: bold; display: none; }
+        
+        h1 { font-weight: 900; font-size: 26px; margin-top: 0; margin-bottom: 15px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; letter-spacing: 1px; } 
+        h1 span { color: var(--accent-red); }
+        .header-title-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+        
+        .tabs-container { display: flex; overflow-x: auto; gap: 6px; border-bottom: 1px solid var(--border-color); margin-bottom: 15px; flex-shrink: 0; scrollbar-width: none; }
+        .tabs-container::-webkit-scrollbar { display: none; }
+        .tab-btn { padding: 12px 16px; background-color: transparent; border: none; color: var(--text-muted); cursor: pointer; font-weight: 800; font-size: 15px; border-radius: 8px 8px 0 0; white-space: nowrap; transition: 0.2s;}
+        .tab-btn.active { background-color: var(--accent-red); color: #ffffff; }
+        
+        .admin-card { background-color: var(--bg-card); border-radius: 12px; padding: 12px; margin-bottom: 15px; border: 1px solid var(--border-color); display: flex; flex-direction: column; }
+        .full-height { max-height: none !important; overflow-y: visible !important; }
+        
+        .form-group { display: none; flex-direction: column; }
+        .form-group.active { display: flex; }
+        
+        .preview-fixed-header { width: 100%; padding-bottom: 10px; margin-bottom: 15px; display: flex; flex-direction: column; }
+        .preview-wrapper { width: 100%; aspect-ratio: 16 / 9; background-color: #222; background-image: linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%, #333), linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%, #333); background-size: 20px 20px; background-position: 0 0, 10px 10px; position: relative; overflow: hidden; border-radius: 6px; border: 1px solid #555; margin-bottom: 15px; }
+        #preview-canvas { width: 1920px; height: 1080px; position: absolute; top: 0; left: 0; transform-origin: top left; pointer-events: auto; }
+        
+        .prev-item { position: absolute; display: flex; flex-direction: row; gap: 15px; align-items: center; justify-content: center; font-weight: 900; border-radius: 0px; transition: transform 0.1s ease, width 0.1s ease, height 0.1s ease, color 0.1s ease; white-space: pre-wrap; line-height: 1.1; text-align: center; cursor: pointer; pointer-events: auto; }
+        .edit-icon { position: absolute; top: 5px; right: 5px; background: #0a84ff; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; justify-content: center; align-items: center; z-index: 100; font-size: 14px; opacity: 1; pointer-events: none; border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.6); }
+        .prev-item.active-edit { outline: 6px solid var(--accent-red) !important; z-index: 99 !important; }
+
+        .editor-scrollable-controls { width: 100%; padding-bottom: 20px; margin-top: 15px; border-top: 1px dashed #444; padding-top: 15px; }
+        .element-edit-group { display: none; animation: fadeIn 0.3s; background: #151517; border: 1px solid #333; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        .element-edit-group.active { display: block; }
+        .element-edit-group h3 { color: var(--accent-red); margin-top: 0; padding-bottom: 8px; border-bottom: 1px solid #333; margin-bottom: 12px; font-size: 15px; }
+        .element-edit-group h4 { color: #a1a1a6; margin-top: 15px; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #282828; padding-bottom: 4px; }
+
+        #master-save-wrapper { width: 100%; margin-top: 5px; margin-bottom: 5px; }
+        label { display: block; font-size: 10px; text-transform: uppercase; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; margin-left: 2px; }
+        
+        input[type="text"], input[type="password"], textarea, select { width: 100%; padding: 10px 12px; margin-bottom: 12px; background-color: var(--bg-black); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-size: 14px; outline: none; box-sizing: border-box; font-family: inherit;}
+        textarea { resize: none; overflow-y: hidden; word-break: break-all; min-height: 44px; }
+
+        .action-btn { width: 100%; padding: 14px; background-color: var(--accent-red); color: white; border: none; border-radius: 8px; font-weight: 700; font-size:15px; cursor: pointer; transition: background-color 0.3s ease; }
+        .test-btn { background-color: #2c2c2e; margin-bottom: 10px; } .test-btn:hover { background-color: #3a3a3c; }
+        .browse-btn { background-color: #0a84ff; margin-bottom: 15px; } .browse-btn:hover { background-color: #0070e0; }
+        
+        .table-wrapper { width: 100%; } 
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color); } th { color: var(--text-muted); font-weight: 600; font-size: 11px; }
+        .name-text { color: var(--accent-red); font-weight: 700; font-size: 12px; text-decoration: none; word-break: break-word;}
+        .name-text:hover { text-decoration: underline; }
+        .btn-sm { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 11px; }
+        .edit-btn { background-color: #0a84ff; color: white; margin-right: 5px; } .delete-btn { background-color: #ff453a; color: white; }
+        
+        .status-badge { text-align: center; font-weight: 600; font-size: 13px; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: none; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12px; font-weight: 600; }
+        .checkbox-group input { width: 16px; height: 16px; accent-color: var(--accent-red); cursor: pointer; }
+        .toggle-badge { background: #222; border: 1px solid #444; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+        .toggle-badge span { font-size: 13px; font-weight: 700; color: #fff; }
+        
+        #test-player-container { border-radius: 12px; overflow: hidden; margin-bottom: 15px; border: 2px solid var(--border-color); background: #000; }
+        h3 { font-size: 15px; margin-top: 0px; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 12px; color: #fff;}
+        .input-row { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; } 
+        .input-row > div { flex: 1; min-width: 110px; }
+        .stepper-control { display: flex; align-items: center; background: #111; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+        .stepper-btn { flex: 1; background: #2c2c2e; color: #fff; border: none; padding: 8px 0; cursor: pointer; font-size: 13px; transition: 0.2s;}
+        .stepper-btn:hover { background: var(--accent-red); }
+        .stepper-btn:active { background: #aa0000; }
+        .stepper-input { flex: 1; background: #000; border: none; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color); color: #fff; text-align: center; font-size: 14px; font-weight: bold; outline: none; margin: 0 !important; padding: 8px 0 !important; width: 40px; }
+        .stepper-input:focus { background: #222; }
+        .stepper-input::-webkit-outer-spin-button, .stepper-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .stepper-input[type=number] { -moz-appearance: textfield; }
+
+        input[type="color"] { width: 100%; height: 36px; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; background: #111; padding: 2px; margin-bottom: 8px; }
+        .dual-color { display: flex; gap: 5px; }
+
+        .stream-status-box { background: #990000; color: #fff; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; margin-top: 10px; display: none; }
+        .stream-status-box.active { display: block; background: #1db954; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen" class="login-wrapper">
+        <div class="login-box">
+            <div class="login-title">Operator Login</div>
+            <div class="login-subtitle">Enter Code.</div>
+            <input type="password" id="op-code-input" class="login-input" placeholder="XXXXXXXX">
+            <button type="button" onclick="loginOperator()" class="login-btn">Login</button>
+            <div id="login-loading" class="loading-text">Verifying Device...</div>
+            <div id="login-error" style="color:#ff4444; margin-top:15px; font-size:14px; display:none;"></div>
+        </div>
+    </div>
+
+    <div id="dashboard" class="container" style="display:none;">
+        <h1>
+            <div class="header-title-text">MY TV <span>PLAYOUT</span></div>
+            <div style="display:none; font-size:11px; color:#aaa; border:1px solid #333; padding:4px 10px; border-radius:20px; font-weight:normal;">Code: <span id="display-code" style="color:#fff; font-weight:bold;"></span></div>
+        </h1>
+
+        <div id="status-badge" class="status-badge"></div>
+
+        <div class="tabs-container">
+            <button type="button" class="tab-btn active" onclick="switchTab('url_playlist', this, 'video')"><i class="fa-solid fa-play"></i> Video Schedule</button>
+            <button type="button" class="tab-btn" onclick="switchTab('apts_text', this, 'text')"><i class="fa-solid fa-bolt"></i> News</button>
+            <button type="button" class="tab-btn" onclick="switchTab('slider_text', this, 'text')"><i class="fa-solid fa-message"></i> Breaking Alert</button>
+            <button type="button" class="tab-btn" onclick="switchTab('slider_playlist', this, 'promo')"><i class="fa-solid fa-images"></i> Top Promo</button>
+            <button type="button" class="tab-btn" onclick="switchTab('overlay_settings', this, 'controls')"><i class="fa-solid fa-gamepad"></i> Layout Editor</button>
+            <button type="button" class="tab-btn" onclick="switchTab('stream_settings', this, 'stream')"><i class="fa-solid fa-tower-broadcast"></i> Stream Settings</button>
+        </div>
+
+        <div class="admin-card">
+            
+            <div id="form-video" class="form-group active">
+                <div id="test-player-container" style="display:none;">
+                    <iframe id="test-player" width="100%" height="250" src="" frameborder="0" allowfullscreen></iframe>
+                    <video id="test-video-player" width="100%" height="250" controls style="display:none; background:#000; object-fit: contain;"></video>
+                </div>
+                <button type="button" class="action-btn test-btn" onclick="testCurrentURL()"><i class="fa-solid fa-magnifying-glass"></i> Test Player</button>
+                
+                <label>Source URL (YouTube or MP4)</label>
+                <textarea id="input-url" placeholder="Paste link here..." rows="2"></textarea>
+
+                <button type="button" class="action-btn browse-btn" onclick="browseLocalFile()"><i class="fa-solid fa-folder-open"></i> Browse Local File (USB / Storage)</button>
+                
+                <div class="checkbox-group" style="display:none;"><input type="checkbox" id="auto-start-checkbox" checked><span>Auto-chain end time to next start time</span></div>
+                
+                <div class="input-row">
+                    <div><label>Start Time (HH:MM:SS)</label><input type="text" id="input-start" value="00:00:00"></div>
+                    <div><label>Duration (HH:MM:SS)</label><input type="text" id="input-duration" value="00:00:00"></div>
+                    <div style="display:none;"><label>End (Result)</label><input type="text" id="input-end" value="00:00:00" readonly style="opacity:0.6; background-color:#1a1a1a;"></div>
+                </div>
+                
+                <div style="margin-bottom: 8px;">
+                    <label>Name (Movie / Song / Event)</label>
+                    <textarea id="input-name" placeholder="Enter title..." rows="1"></textarea>
+                </div>
+
+                <div id="master-save-wrapper-video">
+                    <button type="button" id="add-btn" class="action-btn" style="margin-bottom:0;"><i class="fa-solid fa-save"></i> Save Changes</button>
+                    <button type="button" id="cancel-edit-btn" class="action-btn" style="background:#2c2c2e; display:none; margin-top:10px;">Cancel Edit</button>
+                </div>
+            </div>
+
+            <div id="form-text" class="form-group">
+                <div id="cat-input-container" style="display:none; margin-bottom:10px;">
+                    <label>Category (e.g. Local News, State News)</label>
+                    <textarea id="input-category" placeholder="Leave empty to use default box label..." rows="1"></textarea>
+                </div>
+                <label>Headline Text</label>
+                <textarea id="input-text" placeholder="Type news update here..." rows="3"></textarea>
+            </div>
+
+            <div id="form-promo" class="form-group">
+                <label>Promo Image URL</label>
+                <textarea id="new-promo-url" placeholder="Paste Image link here..." rows="2"></textarea>
+            </div>
+
+            <div id="form-stream" class="form-group" style="padding-bottom: 10px;">
+                <h3 style="margin-bottom: 5px; padding-bottom: 4px; border-bottom: 1px solid #333; font-size:13px;"><i class="fa-solid fa-tower-broadcast" style="color:var(--accent-red);"></i> Streaming Settings</h3>
+                
+                <div style="display:flex; gap:10px; margin-bottom:8px;">
+                    <div class="toggle-badge" style="background: #1a1a1c; border-color: #333; margin-bottom: 0; padding: 8px; flex: 1;">
+                        <span style="font-size: 11px;">Single Output (Screen Only)</span>
+                        <input type="checkbox" id="chk-single-output" onchange="toggleAutoStart('single')">
+                    </div>
+                    <div class="toggle-badge" style="background: #1a1a1c; border-color: #333; margin-bottom: 0; padding: 8px; flex: 1;">
+                        <span style="font-size: 11px;">Dual Output (Screen+Network)</span>
+                        <input type="checkbox" id="chk-dual-output" onchange="toggleAutoStart('dual')">
+                    </div>
+                </div>
+
+                <!-- ADDED: HDMI Headend Mode Checkbox Option -->
+                <div class="toggle-badge" style="background: #1a1a1c; border-color: #333; margin-bottom: 8px; padding: 8px;">
+                    <span style="font-size: 11px;">HDMI Headend Mode (Direct External Encoder)</span>
+                    <input type="checkbox" id="chk-hdmi-mode" onchange="saveStreamSettings()">
+                </div>
+
+                <label style="margin-bottom:2px;">Format</label>
+                <select id="stream-format" onchange="saveStreamSettings()" style="padding:6px; margin-bottom:6px; font-size:12px;">
+                    <option value="RTMP">RTMP Streaming (YouTube, Facebook, Twitch, Ustream)</option>
+                    <option value="UDP">UDP Multicast Streaming (Local Network)</option>
+                    <option value="RTSP">RTSP Streaming Output</option>
+                    <option value="HLS">HLS Segmented Output</option>
+                </select>
+
+                <div class="input-row" style="margin-bottom:0;">
+                    <div>
+                        <label style="margin-bottom:2px;">Video Bitrate</label>
+                        <input type="text" id="stream-vbitrate" placeholder="e.g. 1.5M, 800K" value="1.5M" oninput="saveStreamSettings()" style="padding:6px; margin-bottom:6px; font-size:12px;">
+                    </div>
+                    <div>
+                        <label style="margin-bottom:2px;">Audio Bitrate</label>
+                        <input type="text" id="stream-abitrate" placeholder="e.g. 128K, 64K" value="128K" oninput="saveStreamSettings()" style="padding:6px; margin-bottom:6px; font-size:12px;">
+                    </div>
+                </div>
+
+                <label style="margin-bottom:2px;">Publishing Point (URL)</label>
+                <input type="text" id="stream-url" placeholder="rtmp://..." oninput="saveStreamSettings()" style="padding:6px; margin-bottom:6px; font-size:12px;">
+
+                <label style="margin-bottom:2px;">Stream Key (If Applicable)</label>
+                <input type="text" id="stream-key" placeholder="Your stream key..." oninput="saveStreamSettings()" style="padding:6px; margin-bottom:6px; font-size:12px;">
+
+                <div style="display:flex; gap:8px; margin-top:5px;">
+                    <button type="button" class="action-btn" style="background:#28a745; flex:1; padding:10px; font-size:13px;" onclick="startNativeStream(false)"><i class="fa-solid fa-play"></i> START STREAM</button>
+                    <button type="button" class="action-btn" style="background:#ff453a; flex:1; padding:10px; font-size:13px;" onclick="stopNativeStream()"><i class="fa-solid fa-stop"></i> STOP STREAM</button>
+                </div>
+
+                <div id="stream-status-console" class="stream-status-box">
+                    State: <span id="stream-state-text">Stopped</span><br>
+                    <span id="publishing-point-text" style="font-weight:normal; font-size:11px;">Publishing Point: None</span>
+                </div>
+            </div>
+
+            <div id="form-controls" class="form-group">
+                <div class="preview-fixed-header">
+                    <div class="preview-wrapper" id="preview-wrapper">
+                        <div id="preview-canvas">
+                            <div id="prev-top-banner" class="prev-item" style="top:0; left:0; width:1920px; height:160px; background:rgba(255,255,255,0.9); font-size:60px; font-weight:900; color:#000; z-index:5;" onclick="openEdit('top-banner')">
+                                <span>TOP PROMO</span> <div class="edit-icon"><i class="fa-solid fa-pen"></i></div>
+                            </div>
+                            
+                            <div id="prev-logo1" class="prev-item" style="top:190px; left:40px; width:250px; height:160px; background:rgba(255,255,255,0.9); color:#000; border:2px dashed #000; font-size:50px; z-index:10;" onclick="openEdit('logo-ad')">
+                                <span>ADS LOGO</span> <div class="edit-icon"><i class="fa-solid fa-pen"></i></div>
+                            </div>
+                            
+                            <div id="prev-logo" class="prev-item" style="top:190px; right:40px; width:250px; height:180px; background:rgba(255,255,255,0.9); color:#000; border:2px dashed #000; font-size:50px; z-index:10;" onclick="openEdit('logo-ch')">
+                                <span>CH LOGO</span> <div class="edit-icon"><i class="fa-solid fa-pen"></i></div>
+                            </div>
+                            
+                            <div id="prev-clock-container" class="prev-item" style="bottom:80px; right:0; left:auto; width:260px; height:110px; background:transparent; color:#ffffff; font-size:38px; z-index:2;" onclick="openEdit('clock')">
+                                <span>12:00 PM</span> <div class="edit-icon"><i class="fa-solid fa-pen"></i></div>
+                            </div>
+                            
+                            <div id="prev-row-breaking" class="prev-item" style="bottom:80px; left:0; width:1920px; height:110px; z-index:1;" onclick="openEdit('row-breaking')">
+                                <div id="prev-ticker1-container" style="width:100%; height:100%; background:#cc0000; color:#ffffff; font-size:40px; display:flex; align-items:center; justify-content:center; overflow:hidden; white-space:nowrap;"><span>BREAKING STRIP</span></div>
+                                <div class="edit-icon" style="position: absolute; right: 40px;"><i class="fa-solid fa-pen"></i></div>
+                            </div>
+                            
+                            <div id="prev-breaking-box" class="prev-item" style="bottom:80px; left:0; width:280px; height:110px; background:#cc0000; color:#fff; font-size:32px; z-index:2;" onclick="openEdit('breaking-box')">
+                                <span>BREAKING<br>NEWS</span> <div class="edit-icon"><i class="fa-solid fa-pen"></i></div>
+                            </div>
+                            
+                            <div id="prev-row-apts" style="position:absolute; bottom:0px; left:0; width:1920px; height:80px; display:flex;">
+                                <div id="prev-apts-box" class="prev-item" style="position:relative; width:280px; height:80px; flex-shrink:0; background:#ffff00; color:#000; font-size:32px;" onclick="openEdit('apts-box')">
+                                    <span>NEWS</span> <div class="edit-icon"><i class="fa-solid fa-pen"></i></div>
+                                </div>
+                                <div id="prev-ticker2-container" class="prev-item" style="position:relative; flex-grow:1; height:80px; background:#1313e8; color:#ffffff; font-size:34px; overflow:hidden; white-space:nowrap;" onclick="openEdit('row-apts')">
+                                    <span>NEWS STRIP</span> <div class="edit-icon" style="position: absolute; right: 40px;"><i class="fa-solid fa-pen"></i></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="master-save-wrapper-controls">
+                        <button type="button" id="save-controls-btn" class="action-btn" style="margin-bottom:0;"><i class="fa-solid fa-save"></i> Save Changes</button>
+                    </div>
+                </div>
+
+                <div class="editor-scrollable-controls">
+                    
+                    <div id="edit-prompt" style="text-align:center; padding: 15px 10px; color: #aaa; background: #1a1a1c; border-radius: 8px; border: 1px dashed #444; margin-bottom: 10px; font-size:12px;">
+                        <i class="fa-solid fa-hand-pointer" style="font-size: 18px; margin-bottom: 6px; color:var(--accent-red);"></i><br>
+                        Click any <i class="fa-solid fa-pen" style="color:var(--accent-red);"></i> pen icon in the preview above to edit that layer.
+                    </div>
+
+                    <div id="edit-group-top-banner" class="element-edit-group">
+                        <h3><i class="fa-solid fa-pen"></i> Top Promo Banner</h3>
+                        <div class="toggle-badge">
+                            <span>Show Top Promo</span>
+                            <input type="checkbox" id="chk-promo" checked>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Left/Right (X)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_slider_x', -10)"><i class="fa-solid fa-arrow-left"></i></button><input type="number" id="pos_slider_x" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_slider_x', 10)"><i class="fa-solid fa-arrow-right"></i></button></div></div>
+                            <div><label>Up/Down (Y)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_slider_y', -10)"><i class="fa-solid fa-arrow-up"></i></button><input type="number" id="pos_slider_y" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_slider_y', 10)"><i class="fa-solid fa-arrow-down"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Width</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('banner_w', -10)"><i class="fa-solid fa-minus"></i></button><input type="number" id="banner_w" class="stepper-input" value="1920"><button type="button" class="stepper-btn" onclick="adj('banner_w', 10)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Height</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('banner_h', -5)"><i class="fa-solid fa-minus"></i></button><input type="number" id="banner_h" class="stepper-input" value="160"><button type="button" class="stepper-btn" onclick="adj('banner_h', 5)"><i class="fa-solid fa-plus"></i></button></div></div>
+                        </div>
+                    </div>
+
+                    <div id="edit-group-logo-ad" class="element-edit-group">
+                        <h3><i class="fa-solid fa-pen"></i> Ads Logo (Bottom Right)</h3>
+                        <div class="toggle-badge">
+                            <span>Show Ads Logo</span>
+                            <input type="checkbox" id="chk-logo-news" checked>
+                        </div>
+                        <div class="input-row">
+                            <div>
+                                <label>Ads Logo URL (Image)</label>
+                                <textarea id="input-logo-news" placeholder="e.g., https://.../news.png" rows="2"></textarea>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Left/Right (X)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_logo1_x', -10)"><i class="fa-solid fa-arrow-left"></i></button><input type="number" id="pos_logo1_x" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_logo1_x', 10)"><i class="fa-solid fa-arrow-right"></i></button></div></div>
+                            <div><label>Up/Down (Y)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_logo1_y', -10)"><i class="fa-solid fa-arrow-up"></i></button><input type="number" id="pos_logo1_y" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_logo1_y', 10)"><i class="fa-solid fa-arrow-down"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Width</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('logo1_w', -10)"><i class="fa-solid fa-minus"></i></button><input type="number" id="logo1_w" class="stepper-input" value="250"><button type="button" class="stepper-btn" onclick="adj('logo1_w', 10)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Height</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('logo1_h', -10)"><i class="fa-solid fa-minus"></i></button><input type="number" id="logo1_h" class="stepper-input" value="160"><button type="button" class="stepper-btn" onclick="adj('logo1_h', 10)"><i class="fa-solid fa-plus"></i></button></div></div>
+                        </div>
+                    </div>
+
+                    <div id="edit-group-logo-ch" class="element-edit-group">
+                        <h3><i class="fa-solid fa-pen"></i> Channel Logo (Top Right)</h3>
+                        <div class="toggle-badge">
+                            <span>Show Channel Logo</span>
+                            <input type="checkbox" id="chk-logo-channel" checked>
+                        </div>
+                        <div class="input-row">
+                            <div>
+                                <label>Channel Logo URL (Image)</label>
+                                <textarea id="input-logo-channel" placeholder="e.g., https://.../logo.png" rows="2"></textarea>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Left/Right (X)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_logo_x', -10)"><i class="fa-solid fa-arrow-left"></i></button><input type="number" id="pos_logo_x" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_logo_x', 10)"><i class="fa-solid fa-arrow-right"></i></button></div></div>
+                            <div><label>Up/Down (Y)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_logo_y', -10)"><i class="fa-solid fa-arrow-up"></i></button><input type="number" id="pos_logo_y" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_logo_y', 10)"><i class="fa-solid fa-arrow-down"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Width</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('logo_w', -10)"><i class="fa-solid fa-minus"></i></button><input type="number" id="logo_w" class="stepper-input" value="250"><button type="button" class="stepper-btn" onclick="adj('logo_w', 10)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Height</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('logo_h', -10)"><i class="fa-solid fa-minus"></i></button><input type="number" id="logo_h" class="stepper-input" value="180"><button type="button" class="stepper-btn" onclick="adj('logo_h', 10)"><i class="fa-solid fa-plus"></i></button></div></div>
+                        </div>
+                    </div>
+
+                    <div id="edit-group-clock" class="element-edit-group">
+                        <h3><i class="fa-solid fa-pen"></i> Clock Controls</h3>
+                        <div class="toggle-badge">
+                            <span>Show Clock</span>
+                            <input type="checkbox" id="chk-clock" checked>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Left/Right (X)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('clock_x', -10)"><i class="fa-solid fa-arrow-left"></i></button><input type="number" id="clock_x" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('clock_x', 10)"><i class="fa-solid fa-arrow-right"></i></button></div></div>
+                            <div><label>Up/Down (Y)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('clock_y', -10)"><i class="fa-solid fa-arrow-up"></i></button><input type="number" id="clock_y" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('clock_y', 10)"><i class="fa-solid fa-arrow-down"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Width</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('clock_w', -5)"><i class="fa-solid fa-minus"></i></button><input type="number" id="clock_w" class="stepper-input" value="260"><button type="button" class="stepper-btn" onclick="adj('clock_w', 5)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Height</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('clock_h', -5)"><i class="fa-solid fa-minus"></i></button><input type="number" id="clock_h" class="stepper-input" value="110"><button type="button" class="stepper-btn" onclick="adj('clock_h', 5)"><i class="fa-solid fa-plus"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Text Size</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('clock_size', -2)"><i class="fa-solid fa-minus"></i></button><input type="number" id="clock_size" class="stepper-input" value="38"><button type="button" class="stepper-btn" onclick="adj('clock_size', 2)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Text Color</label><input type="color" id="clock_color" value="#ffffff"></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-bottom: 10px;"><input type="checkbox" id="bg_clock_transparent" checked> <span>Transparent Background</span></div>
+                        <label>Clock Box (Left / Right Color)</label>
+                        <div class="dual-color"><input type="color" id="bg_clock1" value="#9400D3"><input type="color" id="bg_clock2" value="#9400D3"></div>
+                    </div>
+
+                    <div id="edit-group-row-breaking" class="element-edit-group">
+                        <h3><i class="fa-solid fa-pen"></i> Row 1 (Breaking Strip)</h3>
+                        <div class="toggle-badge">
+                            <span>Show Row 1 & Box</span>
+                            <input type="checkbox" id="chk-breaking" checked>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Left/Right (X)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_ticker1_x', -10)"><i class="fa-solid fa-arrow-left"></i></button><input type="number" id="pos_ticker1_x" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_ticker1_x', 10)"><i class="fa-solid fa-arrow-right"></i></button></div></div>
+                            <div><label>Up/Down (Y)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_ticker1_y', -10)"><i class="fa-solid fa-arrow-up"></i></button><input type="number" id="pos_ticker1_y" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_ticker1_y', 10)"><i class="fa-solid fa-arrow-down"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Total Width</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('row1_w', -10)"><i class="fa-solid fa-minus"></i></button><input type="number" id="row1_w" class="stepper-input" value="1920"><button type="button" class="stepper-btn" onclick="adj('row1_w', 10)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Height</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('row1_h', -5)"><i class="fa-solid fa-minus"></i></button><input type="number" id="row1_h" class="stepper-input" value="110"><button type="button" class="stepper-btn" onclick="adj('row1_h', 5)"><i class="fa-solid fa-plus"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div>
+                                <label>Background Image (URL)</label>
+                                <textarea id="ticker1_media" placeholder="Leave empty for solid color..." rows="1"></textarea>
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Text Size</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('ticker1_size', -2)"><i class="fa-solid fa-minus"></i></button><input type="number" id="ticker1_size" class="stepper-input" value="40"><button type="button" class="stepper-btn" onclick="adj('ticker1_size', 2)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Text Color</label><input type="color" id="ticker1_color" value="#ffffff"></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-bottom: 10px;"><input type="checkbox" id="bg_tick1_transparent" checked> <span>Transparent Marquee</span></div>
+                        <label>Marquee Background (Left/Right Color)</label>
+                        <div class="dual-color"><input type="color" id="bg_tick1_1" value="#cc0000"><input type="color" id="bg_tick1_2" value="#cc0000"></div>
+
+                        <h4>Flash Intro Animation</h4>
+                        <div class="input-row">
+                            <div><label>Animated Intro Text</label><input type="text" id="lbl_intro" value="&#128680; FLASH NEWS &#128680;"></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Intro Size</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('intro_size', -2)"><i class="fa-solid fa-minus"></i></button><input type="number" id="intro_size" class="stepper-input" value="44"><button type="button" class="stepper-btn" onclick="adj('intro_size', 2)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Intro Color</label><input type="color" id="intro_color" value="#ffffff"></div>
+                        </div>
+                    </div>
+
+                    <div id="edit-group-breaking-box" class="element-edit-group">
+                        <h3><i class="fa-solid fa-pen"></i> Breaking Box (Left Box)</h3>
+                        <div class="input-row">
+                            <div><label>Left/Right (X)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('brk_box_x', -10)"><i class="fa-solid fa-arrow-left"></i></button><input type="number" id="brk_box_x" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('brk_box_x', 10)"><i class="fa-solid fa-arrow-right"></i></button></div></div>
+                            <div><label>Up/Down (Y)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('brk_box_y', -10)"><i class="fa-solid fa-arrow-up"></i></button><input type="number" id="brk_box_y" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('brk_box_y', 10)"><i class="fa-solid fa-arrow-down"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Box Width</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('brk_box_w', -5)"><i class="fa-solid fa-minus"></i></button><input type="number" id="brk_box_w" class="stepper-input" value="280"><button type="button" class="stepper-btn" onclick="adj('brk_box_w', 5)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Box Height</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('brk_box_h', -5)"><i class="fa-solid fa-minus"></i></button><input type="number" id="brk_box_h" class="stepper-input" value="110"><button type="button" class="stepper-btn" onclick="adj('brk_box_h', 5)"><i class="fa-solid fa-plus"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div>
+                                <label>Box Image (URL)</label>
+                                <textarea id="brk_box_media" placeholder="Leave empty for Text..." rows="1"></textarea>
+                            </div>
+                        </div>
+                        <div class="input-row" style="flex-direction: column;">
+                            <label>Box Text Label</label>
+                            <textarea id="lbl_break" rows="2">BREAKING
+NEWS</textarea>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Box Text Size</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('brk_box_size', -2)"><i class="fa-solid fa-minus"></i></button><input type="number" id="brk_box_size" class="stepper-input" value="32"><button type="button" class="stepper-btn" onclick="adj('brk_box_size', 2)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Box Text Color</label><input type="color" id="brk_box_color" value="#ffffff"></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-bottom: 10px;"><input type="checkbox" id="bg_brk_transparent" checked> <span>Transparent Left Box</span></div>
+                        <label>Left Box Background (Left/Right Color)</label>
+                        <div class="dual-color"><input type="color" id="bg_brk_1" value="#cc0000"><input type="color" id="bg_brk_2" value="#cc0000"></div>
+                    </div>
+
+                    <div id="edit-group-row-apts" class="element-edit-group">
+                        <h3><i class="fa-solid fa-pen"></i> Row 2 (News Strip)</h3>
+                        <div class="toggle-badge">
+                            <span>Show Row 2 (News)</span>
+                            <input type="checkbox" id="chk-apts" checked>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Left/Right (X)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_ticker2_x', -10)"><i class="fa-solid fa-arrow-left"></i></button><input type="number" id="pos_ticker2_x" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_ticker2_x', 10)"><i class="fa-solid fa-arrow-right"></i></button></div></div>
+                            <div><label>Up/Down (Y)</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('pos_ticker2_y', -10)"><i class="fa-solid fa-arrow-up"></i></button><input type="number" id="pos_ticker2_y" class="stepper-input" value="0"><button type="button" class="stepper-btn" onclick="adj('pos_ticker2_y', 10)"><i class="fa-solid fa-arrow-down"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Total Row Width</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('row2_w', -10)"><i class="fa-solid fa-minus"></i></button><input type="number" id="row2_w" class="stepper-input" value="1920"><button type="button" class="stepper-btn" onclick="adj('row2_w', 10)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Total Row Height</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('row2_h', -5)"><i class="fa-solid fa-minus"></i></button><input type="number" id="row2_h" class="stepper-input" value="80"><button type="button" class="stepper-btn" onclick="adj('row2_h', 5)"><i class="fa-solid fa-plus"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Scroll Speed</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('scroll_main', -1)"><i class="fa-solid fa-minus"></i></button><input type="number" id="scroll_main" class="stepper-input" value="10"><button type="button" class="stepper-btn" onclick="adj('scroll_main', 1)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Text Size</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('ticker2_size', -2)"><i class="fa-solid fa-minus"></i></button><input type="number" id="ticker2_size" class="stepper-input" value="34"><button type="button" class="stepper-btn" onclick="adj('ticker2_size', 2)"><i class="fa-solid fa-plus"></i></button></div></div>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Text Color</label><input type="color" id="ticker2_color" value="#ffffff"></div>
+                            <div style="flex:1;"></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-bottom: 10px;"><input type="checkbox" id="bg_tick2_transparent" checked> <span>Transparent Marquee</span></div>
+                        <label>Marquee Background (Left/Right Color)</label>
+                        <div class="dual-color"><input type="color" id="bg_tick2_1" value="#1313e8"><input type="color" id="bg_tick2_2" value="#1313e8"></div>
+                    </div>
+
+                    <div id="edit-group-apts-box" class="element-edit-group">
+                        <h3><i class="fa-solid fa-pen"></i> News Box (Left Box)</h3>
+                        <div class="input-row">
+                            <div><label>Box Width</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('apts_box_w', -5)"><i class="fa-solid fa-minus"></i></button><input type="number" id="apts_box_w" class="stepper-input" value="280"><button type="button" class="stepper-btn" onclick="adj('apts_box_w', 5)"><i class="fa-solid fa-plus"></i></button></div></div>
+                        </div>
+                        <div class="input-row" style="flex-direction: column;">
+                            <label>Default Box Text</label>
+                            <textarea id="lbl_news2" rows="2">NEWS</textarea>
+                        </div>
+                        <div class="input-row">
+                            <div><label>Box Text Size</label><div class="stepper-control"><button type="button" class="stepper-btn" onclick="adj('apts_box_size', -2)"><i class="fa-solid fa-minus"></i></button><input type="number" id="apts_box_size" class="stepper-input" value="32"><button type="button" class="stepper-btn" onclick="adj('apts_box_size', 2)"><i class="fa-solid fa-plus"></i></button></div></div>
+                            <div><label>Box Text Color</label><input type="color" id="apts_box_color" value="#000000"></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-bottom: 10px;"><input type="checkbox" id="bg_apts_transparent" checked> <span>Transparent Left Box</span></div>
+                        <label>Left Box Background (Left/Right Color)</label>
+                        <div class="dual-color"><input type="color" id="bg_apts_1" value="#ffff00"><input type="color" id="bg_apts_2" value="#ffff00"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-wrapper" id="table-wrapper"><div id="data-list"><p style="text-align:center; color: var(--text-muted);">Syncing...</p></div></div>
+    </div>
+
+    <script>
+        const supabaseUrl = 'https://jehffxxhrqwnzhkrcbrv.supabase.co';
+        const supabaseKey = 'sb_publishable_R-ik0luMifvjFakpfDr3cA_8kIGVVQP';
+        const db = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        let activeOperator = null;
+        let currentTable = 'url_playlist'; 
+        let editId = null;
+        let localDeviceId = localStorage.getItem('mytv_device_id');
+
+        if (!localDeviceId) {
+            localDeviceId = 'DEV-' + Math.random().toString(36).substr(2, 10) + Date.now().toString(36);
+            localStorage.setItem('mytv_device_id', localDeviceId);
+        }
+
+        function saveStreamSettings() {
+            localStorage.setItem('mytv_stream_format', document.getElementById('stream-format').value);
+            localStorage.setItem('mytv_stream_vbitrate', document.getElementById('stream-vbitrate').value);
+            localStorage.setItem('mytv_stream_abitrate', document.getElementById('stream-abitrate').value);
+            localStorage.setItem('mytv_stream_url', document.getElementById('stream-url').value);
+            localStorage.setItem('mytv_stream_key', document.getElementById('stream-key').value);
+            localStorage.setItem('mytv_stream_dual', document.getElementById('chk-dual-output').checked);
+            localStorage.setItem('mytv_stream_single', document.getElementById('chk-single-output').checked);
+            localStorage.setItem('mytv_hdmi_mode', document.getElementById('chk-hdmi-mode').checked); // Saved HDMI setting
+        }
+
+        function loadStreamSettings() {
+            if(localStorage.getItem('mytv_stream_format')) document.getElementById('stream-format').value = localStorage.getItem('mytv_stream_format');
+            if(localStorage.getItem('mytv_stream_vbitrate')) document.getElementById('stream-vbitrate').value = localStorage.getItem('mytv_stream_vbitrate');
+            if(localStorage.getItem('mytv_stream_abitrate')) document.getElementById('stream-abitrate').value = localStorage.getItem('mytv_stream_abitrate');
+            if(localStorage.getItem('mytv_stream_url')) document.getElementById('stream-url').value = localStorage.getItem('mytv_stream_url');
+            if(localStorage.getItem('mytv_stream_key')) document.getElementById('stream-key').value = localStorage.getItem('mytv_stream_key');
+            
+            if(localStorage.getItem('mytv_stream_single') !== null) {
+                document.getElementById('chk-single-output').checked = (localStorage.getItem('mytv_stream_single') === 'true');
+            }
+            if(localStorage.getItem('mytv_stream_dual') !== null) {
+                document.getElementById('chk-dual-output').checked = (localStorage.getItem('mytv_stream_dual') === 'true');
+            }
+            if(localStorage.getItem('mytv_hdmi_mode') !== null) {
+                document.getElementById('chk-hdmi-mode').checked = (localStorage.getItem('mytv_hdmi_mode') === 'true');
+            }
+        }
+
+        window.toggleAutoStart = function(type) {
+            if (type === 'single' && document.getElementById('chk-single-output').checked) {
+                document.getElementById('chk-dual-output').checked = false;
+            } else if (type === 'dual' && document.getElementById('chk-dual-output').checked) {
+                document.getElementById('chk-single-output').checked = false;
+            }
+            saveStreamSettings();
+        };
+
+        function getBg(id1, id2, chkId) {
+            const chk = document.getElementById(chkId);
+            if (chk && chk.checked) return 'transparent';
+            const c1 = document.getElementById(id1) ? document.getElementById(id1).value : '#000';
+            const c2 = document.getElementById(id2) ? document.getElementById(id2).value : '#000';
+            return c1 === c2 ? c1 : `linear-gradient(90deg, ${c1}, ${c2})`;
+        }
+
+        window.openEdit = function(id) {
+            document.getElementById('edit-prompt').style.display = 'none';
+            document.querySelectorAll('.element-edit-group').forEach(el => el.classList.remove('active'));
+            
+            const targetGroup = document.getElementById('edit-group-' + id);
+            if(targetGroup) targetGroup.classList.add('active');
+
+            document.querySelectorAll('.prev-item').forEach(el => el.classList.remove('active-edit'));
+            
+            const extraActiveMap = {
+                'row-breaking': ['prev-row-breaking', 'prev-ticker1-container'],
+                'breaking-box': ['prev-breaking-box'],
+                'row-apts': ['prev-row-apts', 'prev-ticker2-container'],
+                'apts-box': ['prev-row-apts', 'prev-apts-box']
+            };
+
+            if (extraActiveMap[id]) {
+                extraActiveMap[id].forEach(elId => document.getElementById(elId)?.classList.add('active-edit'));
+            } else {
+                document.getElementById('prev-' + id)?.classList.add('active-edit');
+            }
+            
+            setTimeout(() => {
+                document.querySelectorAll('.form-group.active textarea').forEach(el => autoResizeTextarea(el));
+            }, 10);
+        };
+
+        function updatePreview() {
+            const getVal = (id, def = 0) => {
+                const el = document.getElementById(id);
+                return el && el.value !== '' ? parseInt(el.value) || 0 : def;
+            };
+            const getCol = (id, def = '#ffffff') => {
+                const el = document.getElementById(id);
+                return el ? el.value : def;
+            };
+            const getTxt = (id, def = '') => {
+                const el = document.getElementById(id);
+                return el ? el.value : def;
+            };
+            
+            const l1 = document.getElementById('prev-logo1');
+            if (l1) {
+                l1.style.transform = `translate(${getVal('pos_logo1_x')}px, ${getVal('pos_logo1_y')}px)`;
+                l1.style.width = getVal('logo1_w', 250) + 'px';
+                l1.style.height = getVal('logo1_h', 160) + 'px';
+            }
+
+            const l2 = document.getElementById('prev-logo');
+            if (l2) {
+                l2.style.transform = `translate(${getVal('pos_logo_x')}px, ${getVal('pos_logo_y')}px)`;
+                l2.style.width = getVal('logo_w', 250) + 'px';
+                l2.style.height = getVal('logo_h', 180) + 'px';
+            }
+
+            const tBan = document.getElementById('prev-top-banner');
+            if (tBan) {
+                tBan.style.transform = `translate(${getVal('pos_slider_x')}px, ${getVal('pos_slider_y')}px)`;
+                tBan.style.height = getVal('banner_h', 160) + 'px';
+                tBan.style.width = getVal('banner_w', 1920) + 'px';
+            }
+
+            const r1 = document.getElementById('prev-row-breaking');
+            if (r1) {
+                r1.style.transform = `translate(${getVal('pos_ticker1_x')}px, ${getVal('pos_ticker1_y')}px)`;
+                r1.style.height = getVal('row1_h', 110) + 'px';
+                r1.style.width = getVal('row1_w', 1920) + 'px';
+            }
+            
+            const t1 = document.getElementById('prev-ticker1-container');
+            if (t1) {
+                t1.style.background = getBg('bg_tick1_1', 'bg_tick1_2', 'bg_tick1_transparent');
+                t1.style.color = getCol('ticker1_color');
+                t1.style.fontSize = getVal('ticker1_size', 40) + 'px';
+            }
+
+            const brkBox = document.getElementById('prev-breaking-box');
+            if (brkBox) {
+                brkBox.style.transform = `translate(${getVal('brk_box_x')}px, ${getVal('brk_box_y')}px)`;
+                brkBox.style.width = getVal('brk_box_w', 280) + 'px';
+                brkBox.style.height = getVal('brk_box_h', 110) + 'px';
+                brkBox.style.fontSize = getVal('brk_box_size', 32) + 'px';
+                brkBox.style.color = getCol('brk_box_color');
+                brkBox.style.background = getBg('bg_brk_1', 'bg_brk_2', 'bg_brk_transparent');
+                brkBox.innerHTML = `<span>${(getTxt('lbl_break') || 'BREAKING\nNEWS').replace(/\n/g, '<br>')}</span> <div class="edit-icon"><i class="fa-solid fa-pen"></i></div>`; 
+            }
+
+            const clk = document.getElementById('prev-clock-container');
+            if (clk) {
+                clk.style.transform = `translate(${getVal('clock_x')}px, ${getVal('clock_y')}px)`;
+                clk.style.width = getVal('clock_w', 260) + 'px';
+                clk.style.height = getVal('clock_h', 110) + 'px';
+                clk.style.background = getBg('bg_clock1', 'bg_clock2', 'bg_clock_transparent');
+                clk.style.color = getCol('clock_color');
+                clk.style.fontSize = getVal('clock_size', 38) + 'px';
+            }
+
+            const r2 = document.getElementById('prev-row-apts');
+            if (r2) {
+                r2.style.transform = `translate(${getVal('pos_ticker2_x')}px, ${getVal('pos_ticker2_y')}px)`;
+                r2.style.height = getVal('row2_h', 80) + 'px';
+                r2.style.width = getVal('row2_w', 1920) + 'px';
+            }
+
+            const t2 = document.getElementById('prev-ticker2-container');
+            if (t2) {
+                t2.style.height = getVal('row2_h', 80) + 'px';
+                t2.style.background = getBg('bg_tick2_1', 'bg_tick2_2', 'bg_tick2_transparent');
+                t2.style.color = getCol('ticker2_color');
+                t2.style.fontSize = getVal('ticker2_size', 34) + 'px';
+            }
+
+            const aptsBox = document.getElementById('prev-apts-box');
+            if (aptsBox) {
+                aptsBox.style.width = getVal('apts_box_w', 280) + 'px';
+                aptsBox.style.height = getVal('row2_h', 80) + 'px';
+                aptsBox.style.fontSize = getVal('apts_box_size', 32) + 'px';
+                aptsBox.style.color = getCol('apts_box_color', '#000000');
+                aptsBox.style.background = getBg('bg_apts_1', 'bg_apts_2', 'bg_apts_transparent');
+                aptsBox.innerHTML = `<span>${(getTxt('lbl_news2') || 'NEWS').replace(/\n/g, '<br>')}</span> <div class="edit-icon"><i class="fa-solid fa-pen"></i></div>`;
+            }
+        }
+
+        function autoResizeTextarea(el) {
+            if(!el || el.tagName !== 'TEXTAREA') return;
+            el.style.height = 'auto';
+            if (el.scrollHeight > 0) {
+                el.style.height = el.scrollHeight + 'px';
+            }
+        }
+
+        document.querySelectorAll('.stepper-input, input[type="color"], textarea, input[type="text"], input[type="checkbox"]').forEach(input => {
+            input.addEventListener('input', (e) => {
+                if(e.target.tagName === 'TEXTAREA') autoResizeTextarea(e.target);
+                updatePreview(); 
+            }); 
+            input.addEventListener('change', updatePreview);
+        });
+
+        function resizePreview() {
+            const wrapper = document.getElementById('preview-wrapper');
+            const canvas = document.getElementById('preview-canvas');
+            if (wrapper && canvas) {
+                const scale = wrapper.clientWidth / 1920;
+                canvas.style.transform = `scale(${scale})`;
+            }
+        }
+        window.addEventListener('resize', resizePreview);
+
+        window.adj = function(id, delta) {
+            const el = document.getElementById(id); 
+            if(el) {
+                let val = parseInt(el.value) || 0; 
+                el.value = val + delta; 
+                updatePreview(); 
+            }
+        };
+
+        window.browseLocalFile = function() {
+            if (window.AndroidBridge && window.AndroidBridge.pickLocalMedia) {
+                window.AndroidBridge.pickLocalMedia();
+            } else {
+                alert("Local file browser available inside the Android TV app.");
+            }
+        };
+
+        window.onLocalFileSelected = function(fileUri, fileName) {
+            const inputUrl = document.getElementById('input-url');
+            if (inputUrl) {
+                inputUrl.value = fileUri;
+                inputUrl.dispatchEvent(new Event('input')); 
+                const inputName = document.getElementById('input-name');
+                if (inputName && !inputName.value) inputName.value = fileName || "Local Video";
+            }
+        };
+
+        window.startNativeStream = function(isAutoStart = false) {
+            const format = document.getElementById('stream-format').value;
+            const vBitrate = document.getElementById('stream-vbitrate').value.trim() || "1.5M";
+            const aBitrate = document.getElementById('stream-abitrate').value.trim() || "128K";
+            const url = document.getElementById('stream-url').value.trim();
+            const key = document.getElementById('stream-key').value.trim();
+            const isDual = document.getElementById('chk-dual-output').checked;
+            const isHdmiMode = document.getElementById('chk-hdmi-mode').checked; // Read HDMI mode
+
+            if (isDual && url) {
+                const displayUrl = key ? `${url}/${key}` : url;
+                const consoleBox = document.getElementById('stream-status-console');
+                const stateText = document.getElementById('stream-state-text');
+                const ptText = document.getElementById('publishing-point-text');
+                
+                consoleBox.classList.add('active');
+                stateText.textContent = "eMS_Running";
+                ptText.textContent = `Target: ${displayUrl} | V: ${vBitrate} | A: ${aBitrate} (${format})${isHdmiMode ? ' [HDMI Headend]' : ''}`;
+
+                if (window.AndroidBridge && window.AndroidBridge.startStreamingFull) {
+                    window.AndroidBridge.startStreamingFull(format, url, key, vBitrate, aBitrate, isHdmiMode);
+                } else if (window.AndroidBridge && window.AndroidBridge.startStreaming) {
+                    window.AndroidBridge.startStreaming(format, displayUrl);
+                }
+            }
+            
+            if (window.AndroidBridge && window.AndroidBridge.launchPlayout) {
+                window.AndroidBridge.launchPlayout();
+            } else {
+                window.location.href = 'https://chanb-three.vercel.app/channel.html?code=' + activeOperator + '&op=' + activeOperator;
+            }
+        };
+
+        window.stopNativeStream = function() {
+            const consoleBox = document.getElementById('stream-status-console');
+            const stateText = document.getElementById('stream-state-text');
+            
+            consoleBox.classList.remove('active');
+            stateText.textContent = "Stopped";
+            
+            if (window.AndroidBridge && window.AndroidBridge.stopStreaming) {
+                window.AndroidBridge.stopStreaming();
+            }
+        };
+
+        const inputUrl = document.getElementById('input-url'); 
+        const inputStart = document.getElementById('input-start'); 
+        const inputDuration = document.getElementById('input-duration'); 
+        const inputEnd = document.getElementById('input-end'); 
+        const autoSetNext = document.getElementById('auto-start-checkbox');
+        
+        window.timeToSec = function(t) { const [h, m, s] = (t || '00:00:00').split(':').map(Number); return (h * 3600) + (m * 60) + s; }
+        function secToTime(s) { let h = Math.floor(s / 3600); let m = Math.floor((s % 3600) / 60); let sec = Math.floor(s % 60); return [h, m, sec].map(v => String(v).padStart(2, '0')).join(':'); }
+        
+        const calculateEnd = () => { try { inputEnd.value = secToTime((timeToSec(inputStart.value) + timeToSec(inputDuration.value)) % 86400); } catch(e){} };
+        inputStart.addEventListener('input', calculateEnd);
+        inputDuration.addEventListener('input', calculateEnd);
+
+        inputUrl.addEventListener('input', () => {
+            const url = inputUrl.value.trim();
+            if (!url) return;
+            
+            if (url.includes('/live/') || url.includes('live_stream')) {
+                inputDuration.value = "00:00:00"; 
+                inputDuration.dispatchEvent(new Event('input'));
+                return;
+            }
+            
+            const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))([^&#?]+)/);
+            if (ytMatch && ytMatch[1] && ytMatch[1].length === 11) { 
+                fetchYoutubeDuration(ytMatch[1]); 
+            } else {
+                fetchHTML5VideoDuration(url);
+            }
+        });
+
+        function fetchHTML5VideoDuration(url) {
+            inputDuration.value = "Fetching...";
+            const tempVid = document.createElement('video');
+            tempVid.style.display = 'none';
+
+            let fallbackTimer = setTimeout(() => {
+                if(inputDuration.value === "Fetching...") {
+                    inputDuration.value = "00:00:00";
+                    inputDuration.dispatchEvent(new Event('input'));
+                }
+                tempVid.remove();
+            }, 5000);
+
+            tempVid.addEventListener('loadedmetadata', function() {
+                clearTimeout(fallbackTimer);
+                let d = tempVid.duration;
+                if(!isNaN(d) && d > 0 && inputDuration.value === "Fetching...") {
+                    inputDuration.value = secToTime(d);
+                    inputDuration.dispatchEvent(new Event('input'));
+                }
+                tempVid.remove();
+            });
+            
+            tempVid.addEventListener('error', function() {
+                clearTimeout(fallbackTimer);
+                if(inputDuration.value === "Fetching...") {
+                    inputDuration.value = "00:00:00";
+                    inputDuration.dispatchEvent(new Event('input'));
+                }
+                tempVid.remove();
+            });
+
+            tempVid.src = url;
+        }
+
+        function fetchYoutubeDuration(videoId) {
+            inputDuration.value = "Fetching...";
+            const container = document.createElement('div'); container.id = 'temp-yt-player'; container.style.display = 'none'; document.body.appendChild(container);
+
+            let fallbackTimer = setTimeout(() => {
+                if(inputDuration.value === "Fetching...") {
+                    inputDuration.value = "00:00:00";
+                    inputDuration.dispatchEvent(new Event('input'));
+                    try { player.destroy(); container.remove(); } catch(e){}
+                }
+            }, 4000);
+
+            let player = new YT.Player('temp-yt-player', {
+                height: '1', width: '1', videoId: videoId, playerVars: { 'autoplay': 1},
+                events: {
+                    'onReady': function(event) { setTimeout(() => { let d = event.target.getDuration(); if(d > 0) { clearTimeout(fallbackTimer); applyDuration(d, player, container); } }, 500); },
+                    'onStateChange': function(event) { let d = event.target.getDuration(); if(d > 0) { clearTimeout(fallbackTimer); applyDuration(d, player, container); } }
+                }
+            });
+        }
+
+        function applyDuration(d, player, container) {
+            if (inputDuration.value !== "Fetching...") return; 
+            inputDuration.value = secToTime(d); inputDuration.dispatchEvent(new Event('input')); 
+            try { player.destroy(); container.remove(); } catch(e){}
+        }
+
+        window.testCurrentURL = () => {
+            const url = inputUrl.value.trim(); if(!url) return;
+            const container = document.getElementById('test-player-container'); 
+            const iframePlayer = document.getElementById('test-player');
+            const videoPlayer = document.getElementById('test-video-player');
+            
+            container.style.display = 'block';
+            
+            const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|live\/|shorts\/))([^&#?]+)/);
+            
+            if (ytMatch && ytMatch[1] && ytMatch[1].length === 11) { 
+                videoPlayer.style.display = 'none';
+                videoPlayer.pause();
+                videoPlayer.src = '';
+                
+                iframePlayer.style.display = 'block';
+                iframePlayer.src = `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1`; 
+            } else { 
+                iframePlayer.style.display = 'none';
+                iframePlayer.src = '';
+                
+                videoPlayer.style.display = 'block';
+                videoPlayer.src = url;
+                videoPlayer.play().catch(e => console.log('Auto-play blocked or error in test player', e));
+            }
+        };
+
+        async function loginOperator() {
+            const code = document.getElementById('op-code-input').value.trim().toUpperCase();
+            const errDiv = document.getElementById('login-error');
+            const loadDiv = document.getElementById('login-loading');
+            
+            errDiv.style.display = 'none';
+            loadDiv.style.display = 'block';
+
+            const { data: opData, error: opErr } = await db.from('operators').select('*').eq('code', code).single();
+            if (opErr || !opData || new Date(opData.expires_at) < new Date()) { 
+                loadDiv.style.display = 'none';
+                errDiv.innerText = "Invalid or Expired Code";
+                errDiv.style.display = 'block'; 
+                return; 
+            }
+
+            const { data: devData, error: devErr } = await db.from('operator_devices').select('*').eq('operator_code', code);
+            if (devErr) {
+                loadDiv.style.display = 'none'; errDiv.innerText = "Database Error"; errDiv.style.display = 'block'; return; 
+            }
+
+            const isAlreadyRegistered = devData.find(d => d.device_id === localDeviceId);
+
+            if (!isAlreadyRegistered) {
+                const maxDevices = opData.max_devices || 1;
+                if (devData.length >= maxDevices) {
+                    loadDiv.style.display = 'none';
+                    errDiv.innerText = `Device limit reached (${maxDevices}/${maxDevices}). Contact Admin.`;
+                    errDiv.style.display = 'block';
+                    return;
+                }
+                
+                let ua = navigator.userAgent;
+                let dName = ua.includes('Android') ? 'Android Box' : (ua.includes('Windows') ? 'Windows Web' : 'Web Browser');
+                await db.from('operator_devices').insert([{ 
+                    operator_code: code, 
+                    device_id: localDeviceId, 
+                    device_name: dName 
+                }]);
+            }
+
+            localStorage.setItem('mytv_saved_operator_code', code);
+            activeOperator = code; 
+            
+            loadDiv.style.display = 'none';
+            document.getElementById('login-screen').style.display = 'none'; 
+            document.getElementById('dashboard').style.display = 'flex'; 
+            document.getElementById('display-code').textContent = code;
+            
+            await loadData();
+
+            // --- AUTO START ENGINE ---
+            const isSingle = document.getElementById('chk-single-output').checked;
+            const isDual = document.getElementById('chk-dual-output').checked;
+            const hasAutoStarted = sessionStorage.getItem('mytv_has_auto_started');
+
+            if (!hasAutoStarted && (isSingle || isDual)) {
+                sessionStorage.setItem('mytv_has_auto_started', 'true');
+                setTimeout(() => {
+                    startNativeStream(true); 
+                }, 1500);
+            }
+        }
+
+        const dataList = document.getElementById('data-list'); 
+        const addBtn = document.getElementById('add-btn'); 
+        const cancelEditBtn = document.getElementById('cancel-edit-btn'); 
+        const statusBadge = document.getElementById('status-badge');
+
+        window.switchTab = function(tbl, btn, type) {
+            currentTable = tbl; 
+            resetForm();
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); 
+            btn.classList.add('active');
+            document.querySelectorAll('.form-group').forEach(f => f.classList.remove('active'));
+            
+            const adminCard = document.querySelector('.admin-card');
+            const saveWrapperVideo = document.getElementById('master-save-wrapper-video');
+            const saveWrapperControls = document.getElementById('master-save-wrapper-controls');
+
+            const formMap = { 'video': 'form-video', 'promo': 'form-promo', 'controls': 'form-controls', 'text': 'form-text', 'stream': 'form-stream' };
+            const targetForm = formMap[type] || 'form-text';
+            
+            document.getElementById(targetForm).classList.add('active'); 
+
+            if(type === 'controls') { 
+                saveWrapperVideo.style.display = 'none';
+                saveWrapperControls.style.display = 'block';
+                adminCard.classList.add('full-height');
+                setTimeout(resizePreview, 60); 
+            } else if (type === 'stream') {
+                saveWrapperVideo.style.display = 'none';
+                saveWrapperControls.style.display = 'none';
+                adminCard.classList.remove('full-height');
+            } else { 
+                document.getElementById(targetForm).appendChild(saveWrapperVideo);
+                saveWrapperVideo.style.display = 'block';
+                saveWrapperControls.style.display = 'none';
+                adminCard.classList.remove('full-height');
+                if(type === 'text') {
+                    const catContainer = document.getElementById('cat-input-container');
+                    if(catContainer) catContainer.style.display = (tbl === 'apts_text') ? 'block' : 'none';
+                }
+            }
+            
+            document.getElementById('table-wrapper').style.display = (type === 'controls' || type === 'stream') ? 'none' : 'block';
+            
+            if(type !== 'stream') {
+                loadData().then(() => {
+                    setTimeout(() => {
+                        document.querySelectorAll('.form-group.active textarea').forEach(el => autoResizeTextarea(el));
+                    }, 50);
+                });
+            }
+        };
+
+        function startEditMode(id) {
+            editId = id;
+            addBtn.innerHTML = '<i class="fa-solid fa-check"></i> Update'; 
+            cancelEditBtn.style.display = 'block'; 
+            window.scrollTo(0,0); 
+        }
+
+        window.editTextEntry = (id, safeText, safeCat) => {
+            const txtInput = document.getElementById('input-text');
+            if(txtInput) { txtInput.value = decodeURIComponent(atob(safeText)); autoResizeTextarea(txtInput); }
+            const catInput = document.getElementById('input-category');
+            if(catInput) { catInput.value = decodeURIComponent(atob(safeCat)); autoResizeTextarea(catInput); }
+            startEditMode(id);
+        };
+        
+        window.editPromo = (id, safeImage) => {
+            const promoInput = document.getElementById('new-promo-url');
+            if(promoInput) { promoInput.value = decodeURIComponent(atob(safeImage)); autoResizeTextarea(promoInput); }
+            startEditMode(id);
+        };
+
+        window.editVideo = (id, safeUrl, start, dur, end, safeName) => { 
+            const url = decodeURIComponent(atob(safeUrl));
+            const name = decodeURIComponent(atob(safeName));
+            inputUrl.value = url; autoResizeTextarea(inputUrl);
+            const inputName = document.getElementById('input-name');
+            if(inputName) { inputName.value = name; autoResizeTextarea(inputName); }
+            inputStart.value = start; 
+            inputDuration.value = dur; 
+            inputEnd.value = end; 
+            startEditMode(id);
+        };
+
+        function renderCard(id, previewHtml, editAction) {
+            const div = document.createElement('div'); 
+            div.className = 'admin-card'; 
+            div.style.padding = '15px'; 
+            div.style.marginBottom = '10px';
+            div.style.display = 'block';
+            div.innerHTML = `
+                <div style="margin-bottom: 15px; font-size: 14px; line-height: 1.5; word-break: break-all;">${previewHtml}</div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn-sm edit-btn" style="flex:1; padding:10px; font-size: 13px; margin:0;" onclick="${editAction}"><i class="fa-solid fa-pen"></i> Edit</button>
+                    <button type="button" class="btn-sm delete-btn" style="flex:1; padding:10px; font-size: 13px; margin:0;" onclick="deleteEntry(${id})"><i class="fa-solid fa-trash"></i> Delete</button>
+                </div>
+            `; 
+            return div;
+        }
+
+        window.highlightCurrentVideo = function() {
+            if (currentTable !== 'url_playlist') return;
+            const now = new Date();
+            const currentSecs = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+
+            const rows = document.querySelectorAll('#data-list table tbody tr');
+            rows.forEach(row => {
+                if(!row.cells || row.cells.length < 2) return;
+                const startStr = row.cells[0].innerText;
+                const durStr = row.cells[1].innerText;
+                
+                const startSecs = window.timeToSec(startStr);
+                const durSecs = window.timeToSec(durStr);
+                const endSecs = startSecs + durSecs;
+
+                let isPlaying = false;
+                if (endSecs > 86400) {
+                    if (currentSecs >= startSecs || currentSecs < (endSecs % 86400)) isPlaying = true;
+                } else {
+                    if (currentSecs >= startSecs && currentSecs < endSecs) isPlaying = true;
+                }
+
+                if (isPlaying) {
+                    row.style.backgroundColor = 'rgba(255, 0, 0, 0.15)';
+                    row.cells[0].style.boxShadow = 'inset 4px 0 0 var(--accent-red)';
+                } else {
+                    row.style.backgroundColor = 'transparent';
+                    row.cells[0].style.boxShadow = 'none';
+                }
+            });
+        };
+        setInterval(highlightCurrentVideo, 10000);
+
+        async function loadData() {
+            if (!activeOperator) return;
+
+            if (currentTable === 'overlay_settings') {
+                const { data } = await db.from('overlay_settings').select('*').eq('operator_code', activeOperator).maybeSingle();
+                const s = data || {};
+                
+                document.getElementById('chk-promo').checked = s.show_promo !== false;
+                document.getElementById('chk-logo-news').checked = s.show_logo_news !== false;
+                document.getElementById('chk-logo-channel').checked = s.show_logo_channel !== false;
+                document.getElementById('chk-clock').checked = s.show_clock !== false;
+                document.getElementById('chk-breaking').checked = s.show_breaking !== false;
+                document.getElementById('chk-apts').checked = s.show_apts !== false;
+
+                document.getElementById('input-logo-news').value = s.logo_news_url || 'news.png';
+                document.getElementById('input-logo-channel').value = s.logo_channel_url || 'logo.png';
+                
+                document.getElementById('pos_logo_x').value = s.logo_x || 0;
+                document.getElementById('pos_logo_y').value = s.logo_y || 0;
+                document.getElementById('pos_logo1_x').value = s.logo1_x || 0;
+                document.getElementById('pos_logo1_y').value = s.logo1_y || 0;
+                
+                document.getElementById('logo_w').value = s.logo_w || 250;
+                document.getElementById('logo_h').value = s.logo_h || 180;
+                document.getElementById('logo1_w').value = s.logo1_w || 250;
+                document.getElementById('logo1_h').value = s.logo1_h || 160;
+
+                document.getElementById('pos_slider_x').value = s.slider_x || 0;
+                document.getElementById('pos_slider_y').value = s.slider_y || 0;
+                document.getElementById('banner_w').value = s.banner_w || 1920;
+                document.getElementById('banner_h').value = s.banner_h || 160;
+
+                document.getElementById('pos_ticker1_x').value = s.ticker1_x || 0;
+                document.getElementById('pos_ticker1_y').value = s.ticker1_y || 0;
+                document.getElementById('row1_w').value = s.row1_w || 1920;
+                document.getElementById('row1_h').value = s.row1_h || 110;
+
+                document.getElementById('brk_box_x').value = s.brk_box_x || 0;
+                document.getElementById('brk_box_y').value = s.brk_box_y || 0;
+                document.getElementById('brk_box_w').value = s.brk_box_w || 280;
+                document.getElementById('brk_box_h').value = s.brk_box_h || 110;
+
+                document.getElementById('clock_x').value = s.clock_x || 0;
+                document.getElementById('clock_y').value = s.clock_y || 0;
+                document.getElementById('clock_w').value = s.clock_w || 260;
+                document.getElementById('clock_h').value = s.clock_h || 110;
+
+                document.getElementById('pos_ticker2_x').value = s.ticker2_x || 0;
+                document.getElementById('pos_ticker2_y').value = s.ticker2_y || 0;
+                document.getElementById('row2_w').value = s.row2_w || 1920;
+                document.getElementById('row2_h').value = s.row2_h || 80;
+                document.getElementById('apts_box_w').value = s.apts_box_w || 280;
+
+                document.getElementById('ticker1_media').value = s.ticker1_media || '';
+                document.getElementById('brk_box_media').value = s.brk_box_media || '';
+
+                document.getElementById('intro_size').value = s.intro_size || 44;
+                document.getElementById('brk_box_size').value = s.brk_box_size || 32;
+                document.getElementById('apts_box_size').value = s.apts_box_size || 32;
+
+                document.getElementById('lbl_intro').value = s.lbl_intro || '&#128680; FLASH NEWS &#128680;';
+                document.getElementById('lbl_break').value = s.lbl_break || 'BREAKING\nNEWS'; 
+                document.getElementById('lbl_news2').value = s.lbl_news2 || 'NEWS'; 
+
+                document.getElementById('scroll_main').value = s.scroll_main || 10;
+
+                document.getElementById('clock_size').value = s.clock_size || 38;
+                document.getElementById('clock_color').value = s.clock_color || '#ffffff';
+                document.getElementById('ticker1_size').value = s.ticker1_size || 40;
+                document.getElementById('ticker1_color').value = s.ticker1_color || '#ffffff';
+                document.getElementById('ticker2_size').value = s.ticker2_size || 34;
+                document.getElementById('ticker2_color').value = s.ticker2_color || '#ffffff';
+
+                document.getElementById('intro_color').value = s.intro_color || '#ffffff';
+                document.getElementById('brk_box_color').value = s.brk_box_color || '#ffffff';
+                document.getElementById('apts_box_color').value = s.apts_box_color || '#000000';
+
+                document.getElementById('bg_clock_transparent').checked = (s.bg_clock1 === 'transparent' || !s.bg_clock1);
+                document.getElementById('bg_tick1_transparent').checked = (s.bg_tick1_1 === 'transparent' || !s.bg_tick1_1);
+                document.getElementById('bg_brk_transparent').checked = (s.bg_brk_1 === 'transparent' || !s.bg_brk_1);
+                document.getElementById('bg_tick2_transparent').checked = (s.bg_tick2_1 === 'transparent' || !s.bg_tick2_1);
+                document.getElementById('bg_apts_transparent').checked = (s.bg_apts_1 === 'transparent' || !s.bg_apts_1);
+
+                document.getElementById('bg_clock1').value = (s.bg_clock1 && s.bg_clock1 !== 'transparent') ? s.bg_clock1 : '#9400D3';
+                document.getElementById('bg_clock2').value = (s.bg_clock2 && s.bg_clock2 !== 'transparent') ? s.bg_clock2 : '#9400D3';
+                document.getElementById('bg_tick1_1').value = (s.bg_tick1_1 && s.bg_tick1_1 !== 'transparent') ? s.bg_tick1_1 : '#cc0000'; 
+                document.getElementById('bg_tick1_2').value = (s.bg_tick1_2 && s.bg_tick1_2 !== 'transparent') ? s.bg_tick1_2 : '#cc0000';
+                document.getElementById('bg_brk_1').value = (s.bg_brk_1 && s.bg_brk_1 !== 'transparent') ? s.bg_brk_1 : '#cc0000'; 
+                document.getElementById('bg_brk_2').value = (s.bg_brk_2 && s.bg_brk_2 !== 'transparent') ? s.bg_brk_2 : '#cc0000';
+                document.getElementById('bg_tick2_1').value = (s.bg_tick2_1 && s.bg_tick2_1 !== 'transparent') ? s.bg_tick2_1 : '#1313e8'; 
+                document.getElementById('bg_tick2_2').value = (s.bg_tick2_2 && s.bg_tick2_2 !== 'transparent') ? s.bg_tick2_2 : '#1313e8';
+                document.getElementById('bg_apts_1').value = (s.bg_apts_1 && s.bg_apts_1 !== 'transparent') ? s.bg_apts_1 : '#ffff00'; 
+                document.getElementById('bg_apts_2').value = (s.bg_apts_2 && s.bg_apts_2 !== 'transparent') ? s.bg_apts_2 : '#ffff00';
+
+                setTimeout(() => {
+                    document.querySelectorAll('.form-group.active textarea').forEach(el => autoResizeTextarea(el));
+                }, 50);
+
+                updatePreview();
+                return;
+            }
+
+            dataList.innerHTML = '<p style="text-align:center;">Fetching...</p>';
+            const { data } = await db.from(currentTable).select('*').eq('operator_code', activeOperator).order('id', { ascending: true });
+            
+            if (currentTable === 'url_playlist') {
+                let html = '<table><thead><tr><th>Start</th><th>Duration</th><th>Name</th><th>Actions</th></tr></thead><tbody>';
+                (data || []).forEach(item => { 
+                    const safeUrl = btoa(encodeURIComponent(item.url || ''));
+                    const safeName = btoa(encodeURIComponent(item.name || ''));
+                    const displayName = item.name ? item.name : 'View';
+                    html += `<tr><td>${item.start}</td><td>${item.duration}</td><td><a class="name-text" href="${item.url}" target="_blank">${displayName}</a></td><td><button type="button" class="btn-sm edit-btn" onclick="editVideo(${item.id}, '${safeUrl}', '${item.start}', '${item.duration}', '${item.end}', '${safeName}')"><i class="fa-solid fa-pen"></i></button><button type="button" class="btn-sm delete-btn" onclick="deleteEntry(${item.id})"><i class="fa-solid fa-trash"></i></button></td></tr>`; 
+                });
+                dataList.innerHTML = html + '</tbody></table>';
+                highlightCurrentVideo();
+            } else {
+                dataList.innerHTML = '';
+                (data || []).forEach(item => {
+                    if (currentTable === 'slider_playlist') {
+                        const mediaPreview = `<img src="${item.image}" style="width:100%; height:auto; border-radius:4px; display:block;">`;
+                        const safeImage = btoa(encodeURIComponent(item.image || ''));
+                        dataList.appendChild(renderCard(item.id, mediaPreview, `editPromo(${item.id}, '${safeImage}')`));
+                    } else {
+                        let content = item.text || '';
+                        let catHtml = '';
+                        if(currentTable === 'apts_text' && item.category) {
+                            catHtml = `<span style="background:var(--accent-red); padding:2px 6px; border-radius:4px; font-size:10px; margin-right:8px; margin-bottom:8px; display:inline-block;">${item.category}</span><br>`;
+                        }
+                        
+                        const safeText = btoa(encodeURIComponent(item.text || ''));
+                        const safeCat = btoa(encodeURIComponent(item.category || ''));
+                        dataList.appendChild(renderCard(item.id, catHtml + content, `editTextEntry(${item.id}, '${safeText}', '${safeCat}')`));
+                    }
+                });
+            }
+        }
+
+        function triggerSaveSuccess(btnEl) {
+            if (!btnEl) return;
+            const originalText = editId ? '<i class="fa-solid fa-check"></i> Update' : '<i class="fa-solid fa-save"></i> Save Changes';
+            btnEl.style.backgroundColor = '#28a745'; 
+            btnEl.innerHTML = '<i class="fa-solid fa-check"></i> Saved Successfully!';
+            setTimeout(() => {
+                btnEl.style.backgroundColor = ''; 
+                btnEl.innerHTML = originalText;
+            }, 2000);
+        }
+
+        async function saveSettings(btnEl) {
+            if (currentTable === 'overlay_settings') {
+                const payload = { 
+                    operator_code: activeOperator, 
+                    show_logo_news: document.getElementById('chk-logo-news').checked, 
+                    show_logo_channel: document.getElementById('chk-logo-channel').checked, 
+                    show_clock: document.getElementById('chk-clock').checked, 
+                    show_promo: document.getElementById('chk-promo').checked, 
+                    show_breaking: document.getElementById('chk-breaking').checked, 
+                    show_apts: document.getElementById('chk-apts').checked, 
+                    logo_news_url: document.getElementById('input-logo-news').value || 'news.png', 
+                    logo_channel_url: document.getElementById('input-logo-channel').value || 'logo.png',
+                    logo_x: parseInt(document.getElementById('pos_logo_x').value) || 0, 
+                    logo_y: parseInt(document.getElementById('pos_logo_y').value) || 0,
+                    logo1_x: parseInt(document.getElementById('pos_logo1_x').value) || 0, 
+                    logo1_y: parseInt(document.getElementById('pos_logo1_y').value) || 0,
+                    logo_w: parseInt(document.getElementById('logo_w').value) || 250, 
+                    logo_h: parseInt(document.getElementById('logo_h').value) || 180,
+                    logo1_w: parseInt(document.getElementById('logo1_w').value) || 250, 
+                    logo1_h: parseInt(document.getElementById('logo1_h').value) || 160,
+                    banner_h: parseInt(document.getElementById('banner_h').value) || 160, 
+                    row1_h: parseInt(document.getElementById('row1_h').value) || 110,
+                    row2_h: parseInt(document.getElementById('row2_h').value) || 80, 
+                    banner_w: parseInt(document.getElementById('banner_w').value) || 1920, 
+                    row1_w: parseInt(document.getElementById('row1_w').value) || 1920, 
+                    row2_w: parseInt(document.getElementById('row2_w').value) || 1920, 
+                    clock_x: parseInt(document.getElementById('clock_x').value) || 0, 
+                    clock_y: parseInt(document.getElementById('clock_y').value) || 0, 
+                    clock_h: parseInt(document.getElementById('clock_h').value) || 110,
+                    brk_box_x: parseInt(document.getElementById('brk_box_x').value) || 0, 
+                    brk_box_y: parseInt(document.getElementById('brk_box_y').value) || 0, 
+                    brk_box_h: parseInt(document.getElementById('brk_box_h').value) || 110,
+                    clock_w: parseInt(document.getElementById('clock_w').value) || 260, 
+                    brk_box_w: parseInt(document.getElementById('brk_box_w').value) || 280,
+                    apts_box_w: parseInt(document.getElementById('apts_box_w').value) || 280, 
+                    ticker1_media: document.getElementById('ticker1_media').value, 
+                    brk_box_media: document.getElementById('brk_box_media').value,
+                    intro_size: parseInt(document.getElementById('intro_size').value) || 44, 
+                    brk_box_size: parseInt(document.getElementById('brk_box_size').value) || 32,
+                    apts_box_size: parseInt(document.getElementById('apts_box_size').value) || 32, 
+                    lbl_intro: document.getElementById('lbl_intro').value,
+                    lbl_break: document.getElementById('lbl_break').value, 
+                    lbl_news2: document.getElementById('lbl_news2').value, 
+                    scroll_main: parseInt(document.getElementById('scroll_main').value) || 10, 
+                    slider_x: parseInt(document.getElementById('pos_slider_x').value) || 0, 
+                    ticker1_x: parseInt(document.getElementById('pos_ticker1_x').value) || 0,
+                    ticker2_x: parseInt(document.getElementById('pos_ticker2_x').value) || 0, 
+                    slider_y: parseInt(document.getElementById('pos_slider_y').value) || 0, 
+                    ticker1_y: parseInt(document.getElementById('pos_ticker1_y').value) || 0,
+                    ticker2_y: parseInt(document.getElementById('pos_ticker2_y').value) || 0, 
+                    clock_size: parseInt(document.getElementById('clock_size').value) || 38, 
+                    clock_color: document.getElementById('clock_color').value,
+                    ticker1_size: parseInt(document.getElementById('ticker1_size').value) || 40, 
+                    ticker1_color: document.getElementById('ticker1_color').value,
+                    ticker2_size: parseInt(document.getElementById('ticker2_size').value) || 34, 
+                    ticker2_color: document.getElementById('ticker2_color').value,
+                    intro_color: document.getElementById('intro_color').value, 
+                    brk_box_color: document.getElementById('brk_box_color').value,
+                    apts_box_color: document.getElementById('apts_box_color').value, 
+                    
+                    bg_clock1: document.getElementById('bg_clock_transparent').checked ? 'transparent' : document.getElementById('bg_clock1').value, 
+                    bg_clock2: document.getElementById('bg_clock_transparent').checked ? 'transparent' : document.getElementById('bg_clock2').value,
+                    bg_tick1_1: document.getElementById('bg_tick1_transparent').checked ? 'transparent' : document.getElementById('bg_tick1_1').value, 
+                    bg_tick1_2: document.getElementById('bg_tick1_transparent').checked ? 'transparent' : document.getElementById('bg_tick1_2').value,
+                    bg_brk_1: document.getElementById('bg_brk_transparent').checked ? 'transparent' : document.getElementById('bg_brk_1').value, 
+                    bg_brk_2: document.getElementById('bg_brk_transparent').checked ? 'transparent' : document.getElementById('bg_brk_2').value,
+                    bg_tick2_1: document.getElementById('bg_tick2_transparent').checked ? 'transparent' : document.getElementById('bg_tick2_1').value, 
+                    bg_tick2_2: document.getElementById('bg_tick2_transparent').checked ? 'transparent' : document.getElementById('bg_tick2_2').value,
+                    bg_apts_1: document.getElementById('bg_apts_transparent').checked ? 'transparent' : document.getElementById('bg_apts_1').value, 
+                    bg_apts_2: document.getElementById('bg_apts_transparent').checked ? 'transparent' : document.getElementById('bg_apts_2').value
+                };
+                const { data } = await db.from('overlay_settings').select('id').eq('operator_code', activeOperator).maybeSingle();
+                if(data) await db.from('overlay_settings').update(payload).eq('operator_code', activeOperator); 
+                else await db.from('overlay_settings').insert([payload]);
+                triggerSaveSuccess(btnEl); 
+                return;
+            }
+
+            let payload = { operator_code: activeOperator };
+            if (currentTable === 'url_playlist') { 
+                payload.url = inputUrl.value; 
+                payload.start = inputStart.value; 
+                payload.duration = inputDuration.value; 
+                payload.end = inputEnd.value; 
+                payload.name = document.getElementById('input-name').value;
+            } else if (currentTable === 'slider_playlist') {
+                payload.image = document.getElementById('new-promo-url').value;
+            } else { 
+                const inTxt = document.getElementById('input-text');
+                if (inTxt) payload.text = inTxt.value; 
+                if (currentTable === 'apts_text') {
+                    const inCat = document.getElementById('input-category');
+                    if (inCat) payload.category = inCat.value;
+                }
+            }
+
+            const { error } = editId ? await db.from(currentTable).update(payload).eq('id', editId) : await db.from(currentTable).insert([payload]);
+            if (!error) { 
+                triggerSaveSuccess(btnEl); 
+                const nextStart = inputEnd.value; 
+                resetForm(); 
+                if(autoSetNext && autoSetNext.checked && currentTable === 'url_playlist') inputStart.value = nextStart; 
+                loadData(); 
+            } else {
+                console.error(error);
+                alert("Database Error: " + error.message);
+            }
+        }
+
+        document.getElementById('add-btn').addEventListener('click', function() { saveSettings(this); });
+        document.getElementById('save-controls-btn').addEventListener('click', function() { saveSettings(this); });
+        
+        window.deleteEntry = async (id) => { 
+            if(confirm("Confirm deletion?")) { 
+                await db.from(currentTable).delete().eq('id', id); 
+                loadData(); 
+            } 
+        };
+        
+        function resetForm() { 
+            editId = null; 
+            const addBtn1 = document.getElementById('add-btn');
+            const addBtn2 = document.getElementById('save-controls-btn');
+            if(addBtn1) addBtn1.innerHTML = '<i class="fa-solid fa-save"></i> Save Changes'; 
+            if(addBtn2) addBtn2.innerHTML = '<i class="fa-solid fa-save"></i> Save Changes'; 
+            if(cancelEditBtn) cancelEditBtn.style.display = 'none'; 
+            
+            const clearInput = (id, defaultVal = '') => { const el = document.getElementById(id); if(el) { el.value = defaultVal; autoResizeTextarea(el); } };
+
+            clearInput('input-url');
+            clearInput('input-start', '00:00:00');
+            clearInput('input-duration', '00:00:00');
+            clearInput('input-end', '00:00:00');
+            clearInput('input-name');
+            clearInput('input-text');
+            clearInput('input-category');
+            clearInput('new-promo-url');
+
+            const tpContainer = document.getElementById('test-player-container'); if(tpContainer) tpContainer.style.display = 'none'; 
+            const tPlayer = document.getElementById('test-player'); if(tPlayer) tPlayer.src = ''; 
+            const vPlayer = document.getElementById('test-video-player'); if(vPlayer) { vPlayer.pause(); vPlayer.src = ''; }
+        }
+        
+        cancelEditBtn.onclick = resetForm;
+        
+        setTimeout(() => {
+            loadStreamSettings(); 
+            const savedCode = localStorage.getItem('mytv_saved_operator_code');
+            if(savedCode) {
+                const opInput = document.getElementById('op-code-input');
+                if (opInput) opInput.value = savedCode;
+                loginOperator();
+            }
+        }, 100);
+    </script>
+</body>
+</html>

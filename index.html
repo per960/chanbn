@@ -189,7 +189,7 @@
                     </div>
                 </div>
 
-                <!-- ADDED: HDMI Headend Mode Checkbox Option -->
+                <!-- HDMI Headend Mode Checkbox Option -->
                 <div class="toggle-badge" style="background: #1a1a1c; border-color: #333; margin-bottom: 8px; padding: 8px;">
                     <span style="font-size: 11px;">HDMI Headend Mode (Direct External Encoder)</span>
                     <input type="checkbox" id="chk-hdmi-mode" onchange="saveStreamSettings()">
@@ -508,7 +508,7 @@ NEWS</textarea>
             localStorage.setItem('mytv_stream_key', document.getElementById('stream-key').value);
             localStorage.setItem('mytv_stream_dual', document.getElementById('chk-dual-output').checked);
             localStorage.setItem('mytv_stream_single', document.getElementById('chk-single-output').checked);
-            localStorage.setItem('mytv_hdmi_mode', document.getElementById('chk-hdmi-mode').checked); // Saved HDMI setting
+            localStorage.setItem('mytv_hdmi_mode', document.getElementById('chk-hdmi-mode').checked);
         }
 
         function loadStreamSettings() {
@@ -729,7 +729,7 @@ NEWS</textarea>
             const url = document.getElementById('stream-url').value.trim();
             const key = document.getElementById('stream-key').value.trim();
             const isDual = document.getElementById('chk-dual-output').checked;
-            const isHdmiMode = document.getElementById('chk-hdmi-mode').checked; // Read HDMI mode
+            const isHdmiMode = document.getElementById('chk-hdmi-mode').checked;
 
             if (isDual && url) {
                 const displayUrl = key ? `${url}/${key}` : url;
@@ -751,7 +751,8 @@ NEWS</textarea>
             if (window.AndroidBridge && window.AndroidBridge.launchPlayout) {
                 window.AndroidBridge.launchPlayout();
             } else {
-                window.location.href = 'https://chanb-three.vercel.app/channel.html?code=' + activeOperator + '&op=' + activeOperator;
+                // UPDATED VERCEL LINK
+                window.location.href = 'https://chanbn.vercel.app/channel.html?code=' + activeOperator + '&op=' + activeOperator;
             }
         };
 

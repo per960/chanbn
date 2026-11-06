@@ -18,7 +18,7 @@
         .player-wrapper { position: relative; width: 100%; height: 100%; max-width: calc(100vh * (16 / 9)); max-height: calc(100vw * (9 / 16)); background-color: #000; overflow: hidden; aspect-ratio: 16 / 9; }
         
         #yt-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; display: none; pointer-events: none; }
-        #yt-wrapper iframe { width: 100%; height: 100%; border: none; pointer-events: none; }
+        #yt-wrapper iframe { width: 100%; height: 100%; border: none; }
         
         #html5-player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 1; object-fit: fill; display: none; background: #000; pointer-events: none; }
 
@@ -59,8 +59,7 @@
 <body>
     <main>
         <section class="player-wrapper">
-            <!-- REMOVED crossorigin="anonymous" so all MP4 links play without CORS block -->
-            <video id="html5-player" autoplay playsinline></video>
+            <video id="html5-player" crossorigin="anonymous" autoplay playsinline></video>
             <div id="yt-wrapper"><div id="video-player"></div></div>
             
             <div id="overlay-scaler">
@@ -124,6 +123,7 @@
         const html5Player = document.getElementById('html5-player');
         const ytWrapper = document.getElementById('yt-wrapper');
 
+        // Sequence Triggers
         function onVideoEnded() {
             if (isSequentialMode && data.urlPlaylist && data.urlPlaylist.length > 0) {
                 sequentialIndex = (sequentialIndex + 1) % data.urlPlaylist.length;
@@ -134,13 +134,10 @@
         function onPlayerStateChange(event) {
             if (event.data === YT.PlayerState.ENDED) {
                 onVideoEnded();
-            } else if (event.data === YT.PlayerState.PAUSED) {
-                setTimeout(() => {
-                    try { ytPlayerInstance.playVideo(); } catch(e){}
-                }, 300);
             }
         }
 
+        // Attach listeners for HTML5 Media
         html5Player.addEventListener('ended', onVideoEnded);
         html5Player.addEventListener('error', onVideoEnded);
 
@@ -411,21 +408,26 @@
                 if (parsed.searchParams.has('list')) { playlistId = parsed.searchParams.get('list'); isYouTube = true; }
             } catch(e){}
 
+            // -------------------------------------------------------------
+            // STRICT KILL PREVIOUS PLAYER TO PREVENT AUDIO MIXING
+            // -------------------------------------------------------------
             if (isYouTube) {
+                // Moving to YouTube -> Forcefully kill HTML5 audio buffer
                 html5Player.style.display = 'none';
                 try {
                     html5Player.pause();
-                    html5Player.removeAttribute('src');
-                    html5Player.load();
+                    html5Player.removeAttribute('src'); // Detach source
+                    html5Player.load(); // Dump memory buffer to guarantee silence
                 } catch(e) {}
                 if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
 
+                // START YOUTUBE
                 ytWrapper.style.display = 'block';
                 if (typeof YT !== 'undefined' && YT.Player) {
                     if (!ytPlayerInstance) {
                         ytPlayerInstance = new YT.Player('video-player', {
                             videoId: videoId || '',
-                            playerVars: { 'autoplay': 1, 'controls': 0, 'disablekb': 1, 'modestbranding': 1, 'rel': 0, 'playsinline': 1, 'start': Math.floor(offsetSeconds), 'list': playlistId || '' },
+                            playerVars: { 'autoplay': 1, 'controls': 0, 'modestbranding': 1, 'rel': 0, 'playsinline': 1, 'start': Math.floor(offsetSeconds), 'list': playlistId || '' },
                             events: { 'onStateChange': onPlayerStateChange, 'onError': onVideoEnded }
                         });
                     } else {
@@ -434,13 +436,16 @@
                     }
                 }
             } else {
+                // Moving to HTML5 -> Forcefully kill YouTube Iframe
                 ytWrapper.style.display = 'none';
                 if (ytPlayerInstance) {
                     try { ytPlayerInstance.destroy(); } catch(e) {}
                     ytPlayerInstance = null;
                 }
+                // Wipe the iframe element entirely from the DOM to silence it immediately
                 ytWrapper.innerHTML = '<div id="video-player"></div>';
 
+                // START HTML5
                 html5Player.style.display = 'block';
                 const isM3u8 = videoUrl.toLowerCase().includes('.m3u8');
                 
@@ -467,12 +472,13 @@
             let matchedIndex = -1; 
             let offsetSeconds = 0; 
             
+            // 1. STRICT TIME MATCH CHECK
             for (let i = 0; i < data.urlPlaylist.length; i++) {
                 const item = data.urlPlaylist[i]; 
                 const startSec = timeToSec(item.start); 
                 const endSec = timeToSec(item.end);
                 
-                if (startSec === 0 && endSec === 0) continue;
+                if (startSec === 0 && endSec === 0) continue; // Skip zero-times, these belong to sequential logic
                 
                 if (startSec < endSec) {
                     if (currentSec >= startSec && currentSec < endSec) { matchedIndex = i; offsetSeconds = currentSec - startSec; break; }
@@ -481,12 +487,15 @@
                 }
             }
 
+            // 2. APPLY SCHEDULING MODE
             if (matchedIndex !== -1) {
+                // MODE A: TIME-BASED
                 isSequentialMode = false;
                 if (matchedIndex !== currentVideoIndex) {
                     playVideoAtIndex(matchedIndex, offsetSeconds);
                 }
             } else {
+                // MODE B: SEQUENTIAL LOOP (Fallback when no time matches)
                 if (!isSequentialMode) {
                     isSequentialMode = true;
                     if (currentVideoIndex === -1) currentVideoIndex = 0;

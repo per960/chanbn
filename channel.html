@@ -7,6 +7,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
 
     <style>
         :root { --primary-bg: #000000; --text-light: #ffffff; --font-main: 'Roboto', sans-serif; }
@@ -15,7 +17,10 @@
         main { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
         .player-wrapper { position: relative; width: 100%; height: 100%; max-width: calc(100vh * (16 / 9)); max-height: calc(100vw * (9 / 16)); background-color: #000; overflow: hidden; aspect-ratio: 16 / 9; }
         
-        .player-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 1; pointer-events: none; }
+        #yt-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; display: none; pointer-events: none; }
+        #yt-wrapper iframe { width: 100%; height: 100%; border: none; }
+        
+        #html5-player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 1; object-fit: fill; display: none; background: #000; pointer-events: none; }
 
         #overlay-scaler { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; transform-origin: top left; pointer-events: none; z-index: 10; }
         #top-image-slider { position: absolute; top: 0; left: 0; width: 100%; height: 160px; z-index: 50; background-color: transparent; overflow: hidden; }
@@ -54,7 +59,8 @@
 <body>
     <main>
         <section class="player-wrapper">
-            <iframe id="video-player" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            <video id="html5-player" crossorigin="anonymous" autoplay playsinline></video>
+            <div id="yt-wrapper"><div id="video-player"></div></div>
             
             <div id="overlay-scaler">
                 <div id="top-image-slider">
@@ -105,9 +111,35 @@
         let data = { urlPlaylist: [], aptsText: [], sliderText: [], sliderPlaylist: [], settings: null };
         
         let currentVideoIndex = -1; 
+        let isSequentialMode = false;
+        let sequentialIndex = 0;
+        
         let syncIndex = 0; let syncInterval = null; let imageSlideIndex = 0; let imageSliderInterval = null;
         let breakTimeout1, breakTimeout2; 
         let aptsCurrentIndex = 0; let aptsTickerTimeout = null;
+        
+        let hlsInstance = null;
+        let ytPlayerInstance = null;
+        const html5Player = document.getElementById('html5-player');
+        const ytWrapper = document.getElementById('yt-wrapper');
+
+        // Sequence Triggers
+        function onVideoEnded() {
+            if (isSequentialMode && data.urlPlaylist && data.urlPlaylist.length > 0) {
+                sequentialIndex = (sequentialIndex + 1) % data.urlPlaylist.length;
+                playVideoAtIndex(sequentialIndex, 0);
+            }
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
+                onVideoEnded();
+            }
+        }
+
+        // Attach listeners for HTML5 Media
+        html5Player.addEventListener('ended', onVideoEnded);
+        html5Player.addEventListener('error', onVideoEnded);
 
         window.startPlayout = function(opCode) {
             OPERATOR_CODE = (opCode || "").trim().toUpperCase();
@@ -119,9 +151,18 @@
             clearTimeout(syncInterval); clearTimeout(breakTimeout1); clearTimeout(breakTimeout2);
             clearTimeout(aptsTickerTimeout); clearTimeout(imageSliderInterval);
             
-            const player = document.getElementById('video-player');
-            if (player) player.src = '';
-            currentVideoIndex = -1;
+            if (ytPlayerInstance) {
+                try { ytPlayerInstance.destroy(); } catch(e){}
+                ytPlayerInstance = null;
+            }
+            ytWrapper.innerHTML = '<div id="video-player"></div>';
+            
+            if (html5Player) { 
+                html5Player.pause(); 
+                html5Player.removeAttribute('src'); 
+                html5Player.load();
+            }
+            if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
         };
 
         function getBg(c1, c2) { return c1 === c2 ? c1 : `linear-gradient(90deg, ${c1}, ${c2})`; }
@@ -194,9 +235,9 @@
                 imgEl.style.display = 'block';
                 imgEl.style.animation = 'none'; 
                 imgEl.offsetHeight; 
-                imgEl.style.animation = 'fadeInOut 10s infinite';
+                imgEl.style.animation = 'fadeInOut 20s infinite';
                 
-                imageSliderInterval = setTimeout(moveToNext, 10000);
+                imageSliderInterval = setTimeout(moveToNext, 20000);
             };
             
             const moveToNext = () => { imageSlideIndex = (imageSlideIndex + 1) % data.sliderPlaylist.length; updateSlide(); };
@@ -233,6 +274,14 @@
                 applyMediaLayer(s.logo_channel_url, document.getElementById('logo-img'));
             }
 
+            const promoSlider = document.getElementById('top-image-slider'); 
+            if(promoSlider && data.sliderPlaylist.length > 0) {
+                promoSlider.style.display = s.show_promo ? 'block' : 'none';
+                promoSlider.style.transform = `translate(${s.slider_x || 0}px, ${s.slider_y || 0}px)`; 
+                if(s.banner_h) promoSlider.style.height = s.banner_h + 'px';
+                if(s.banner_w) promoSlider.style.width = s.banner_w + 'px';
+            }
+            
             const clock = document.getElementById('clock-container'); const clockDisplay = document.getElementById('display');
             if(clock) {
                 clock.style.display = s.show_clock ? 'flex' : 'none';
@@ -353,6 +402,77 @@
 
         function timeToSec(t) { if (!t) return 0; const [h, m, s] = t.split(':').map(Number); return (h * 3600) + (m * 60) + s; }
 
+        function playVideoAtIndex(index, offsetSeconds) {
+            currentVideoIndex = index;
+            const videoUrl = data.urlPlaylist[index].url;
+            let videoId = null; let playlistId = null;
+            let isYouTube = false;
+
+            try {
+                let ytMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|live\/|shorts\/|watch\?v=))([^&#?]+)/);
+                if (ytMatch && ytMatch[1]) { videoId = ytMatch[1]; isYouTube = true; }
+                let parsed = new URL(videoUrl);
+                if (parsed.searchParams.has('v')) { videoId = parsed.searchParams.get('v'); isYouTube = true; }
+                if (parsed.searchParams.has('list')) { playlistId = parsed.searchParams.get('list'); isYouTube = true; }
+            } catch(e){}
+
+            // -------------------------------------------------------------
+            // STRICT KILL PREVIOUS PLAYER TO PREVENT AUDIO MIXING
+            // -------------------------------------------------------------
+            if (isYouTube) {
+                // Moving to YouTube -> Forcefully kill HTML5 audio buffer
+                html5Player.style.display = 'none';
+                try {
+                    html5Player.pause();
+                    html5Player.removeAttribute('src'); // Detach source
+                    html5Player.load(); // Dump memory buffer to guarantee silence
+                } catch(e) {}
+                if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+
+                // START YOUTUBE
+                ytWrapper.style.display = 'block';
+                if (typeof YT !== 'undefined' && YT.Player) {
+                    if (!ytPlayerInstance) {
+                        ytPlayerInstance = new YT.Player('video-player', {
+                            videoId: videoId || '',
+                            playerVars: { 'autoplay': 1, 'controls': 0, 'modestbranding': 1, 'rel': 0, 'playsinline': 1, 'start': Math.floor(offsetSeconds), 'list': playlistId || '' },
+                            events: { 'onStateChange': onPlayerStateChange, 'onError': onVideoEnded }
+                        });
+                    } else {
+                        if (playlistId && !videoId) ytPlayerInstance.loadPlaylist({list: playlistId, index: 0, startSeconds: offsetSeconds});
+                        else ytPlayerInstance.loadVideoById({videoId: videoId, startSeconds: offsetSeconds});
+                    }
+                }
+            } else {
+                // Moving to HTML5 -> Forcefully kill YouTube Iframe
+                ytWrapper.style.display = 'none';
+                if (ytPlayerInstance) {
+                    try { ytPlayerInstance.destroy(); } catch(e) {}
+                    ytPlayerInstance = null;
+                }
+                // Wipe the iframe element entirely from the DOM to silence it immediately
+                ytWrapper.innerHTML = '<div id="video-player"></div>';
+
+                // START HTML5
+                html5Player.style.display = 'block';
+                const isM3u8 = videoUrl.toLowerCase().includes('.m3u8');
+                
+                if (isM3u8 && typeof Hls !== 'undefined' && Hls.isSupported()) {
+                    if (hlsInstance) hlsInstance.destroy();
+                    hlsInstance = new Hls({ startPosition: offsetSeconds, enableWorker: true });
+                    hlsInstance.loadSource(videoUrl);
+                    hlsInstance.attachMedia(html5Player);
+                    hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() { html5Player.play().catch(()=>{}); });
+                    hlsInstance.on(Hls.Events.ERROR, function(e, d) { if(d.fatal) onVideoEnded(); });
+                } else {
+                    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+                    html5Player.src = videoUrl;
+                    html5Player.currentTime = offsetSeconds;
+                    html5Player.play().catch(()=>{});
+                }
+            }
+        }
+
         function scheduleVideo() {
             if (!data.urlPlaylist || data.urlPlaylist.length === 0) return;
             const currentSec = timeToSec(new Date().toTimeString().slice(0, 8)); 
@@ -360,71 +480,36 @@
             let matchedIndex = -1; 
             let offsetSeconds = 0; 
             
+            // 1. STRICT TIME MATCH CHECK
             for (let i = 0; i < data.urlPlaylist.length; i++) {
                 const item = data.urlPlaylist[i]; 
                 const startSec = timeToSec(item.start); 
                 const endSec = timeToSec(item.end);
                 
-                if (startSec <= endSec) {
-                    if (currentSec >= startSec && currentSec < endSec) { 
-                        matchedIndex = i; offsetSeconds = currentSec - startSec; break; 
-                    }
-                } else {
-                    if (currentSec >= startSec || currentSec < endSec) { 
-                        matchedIndex = i; offsetSeconds = currentSec >= startSec ? currentSec - startSec : (currentSec + 86400) - startSec; break; 
-                    }
+                if (startSec === 0 && endSec === 0) continue; // Skip zero-times, these belong to sequential logic
+                
+                if (startSec < endSec) {
+                    if (currentSec >= startSec && currentSec < endSec) { matchedIndex = i; offsetSeconds = currentSec - startSec; break; }
+                } else if (startSec > endSec) {
+                    if (currentSec >= startSec || currentSec < endSec) { matchedIndex = i; offsetSeconds = currentSec >= startSec ? currentSec - startSec : (currentSec + 86400) - startSec; break; }
                 }
             }
 
-            if (matchedIndex === -1) {
-                let totalDuration = 0;
-                const durations = data.urlPlaylist.map(item => {
-                    const d = timeToSec(item.duration) || 0;
-                    totalDuration += d;
-                    return d;
-                });
-
-                if (totalDuration > 0) {
-                    const playTime = currentSec % totalDuration;
-                    let runningSum = 0;
-                    for (let i = 0; i < data.urlPlaylist.length; i++) {
-                        let vidDur = durations[i];
-                        if (playTime >= runningSum && playTime < runningSum + vidDur) {
-                            matchedIndex = i;
-                            offsetSeconds = playTime - runningSum;
-                            break;
-                        }
-                        runningSum += vidDur;
-                    }
+            // 2. APPLY SCHEDULING MODE
+            if (matchedIndex !== -1) {
+                // MODE A: TIME-BASED
+                isSequentialMode = false;
+                if (matchedIndex !== currentVideoIndex) {
+                    playVideoAtIndex(matchedIndex, offsetSeconds);
                 }
-            }
-            
-            if (matchedIndex !== -1 && matchedIndex !== currentVideoIndex) {
-                currentVideoIndex = matchedIndex; 
-                const videoUrl = data.urlPlaylist[matchedIndex].url; 
-                let fullUrl = videoUrl;
-                
-                let videoId = null; let playlistId = null;
-                try {
-                    let ytMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|live\/|shorts\/))([^&#?]+)/);
-                    if (ytMatch && ytMatch[1]) videoId = ytMatch[1];
-                    let parsed = new URL(videoUrl);
-                    if (parsed.searchParams.has('v')) videoId = parsed.searchParams.get('v');
-                    if (parsed.searchParams.has('list')) playlistId = parsed.searchParams.get('list');
-                } catch(e){}
-
-                if (playlistId && !videoId) {
-                    fullUrl = `https://www.youtube.com/embed/videoseries?list=${playlistId}&autoplay=1&controls=0&modestbranding=1&rel=0&playsinline=1&start=${Math.floor(offsetSeconds)}`;
-                } else if (videoId) {
-                    fullUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&controls=0&modestbranding=1&rel=0&playsinline=1&start=${Math.floor(offsetSeconds)}`;
-                    if(playlistId) fullUrl += `&list=${playlistId}`;
-                } else {
-                    const sep = videoUrl.includes('?') ? '&' : '?';
-                    fullUrl += `${sep}autoplay=1&controls=0&modestbranding=1&rel=0&playsinline=1#t=${Math.floor(offsetSeconds)}`;
+            } else {
+                // MODE B: SEQUENTIAL LOOP (Fallback when no time matches)
+                if (!isSequentialMode) {
+                    isSequentialMode = true;
+                    if (currentVideoIndex === -1) currentVideoIndex = 0;
+                    sequentialIndex = currentVideoIndex;
+                    playVideoAtIndex(sequentialIndex, 0);
                 }
-                
-                const player = document.getElementById('video-player'); 
-                if (player) player.src = fullUrl;
             }
         }
 
@@ -444,24 +529,20 @@
             }, 500); 
         }
 
-                async function init() {
+        async function init() {
             if (document.getElementById('display')) document.getElementById('display').textContent = "00:00 AM";
             updateDisplay(); setInterval(updateDisplay, 8000); 
-            await loadPlaylist(); 
-            setInterval(loadPlaylist, 5 * 60 * 1000); 
-            setInterval(scheduleVideo, 1000); 
-            resizeOverlay();
+            
+            const checkYtInterval = setInterval(async () => {
+                if (typeof YT !== 'undefined' && YT.Player) {
+                    clearInterval(checkYtInterval);
+                    await loadPlaylist(); 
+                    setInterval(loadPlaylist, 5 * 60 * 1000); 
+                    setInterval(scheduleVideo, 1000); 
+                    resizeOverlay();
+                }
+            }, 200);
         }
-
-        // Auto-detect operator code from URL for browser testing
-        window.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlCode = urlParams.get('code') || urlParams.get('op') || urlParams.get('c');
-            if (urlCode && !OPERATOR_CODE) {
-                window.startPlayout(urlCode);
-            }
-        });
-
     </script>
 </body>
 </html>
